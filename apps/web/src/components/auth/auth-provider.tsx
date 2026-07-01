@@ -1,6 +1,7 @@
 "use client";
 
 import { usePrivy } from "@privy-io/react-auth";
+import { useWallets as useSolanaWallets } from "@privy-io/react-auth/solana";
 import {
   createContext,
   useCallback,
@@ -47,6 +48,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 function PrivyAuthProvider({ children }: { children: ReactNode }) {
   const { ready, authenticated, login, logout, getAccessToken } = usePrivy();
+  // Solana wallet list — an email/social login provisions its embedded wallet
+  // asynchronously, so we wait for it before exchanging (see the effect below).
+  const { ready: solanaReady, wallets: solanaWallets } = useSolanaWallets();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<AuthStatus>("loading");
 
@@ -70,8 +74,13 @@ function PrivyAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Once Privy authenticates and we have no session yet, exchange for our JWT.
+  // Gate on the Solana wallet existing first: the server reads the wallet from
+  // Privy's linked accounts at exchange time, so minting before the embedded
+  // wallet finishes provisioning would persist a null address. createOnLogin
+  // guarantees one lands for email/social logins; external logins already have it.
   useEffect(() => {
     if (!ready || !authenticated || user) return;
+    if (!solanaReady || solanaWallets.length === 0) return;
     let active = true;
     void (async () => {
       const accessToken = await getAccessToken();
@@ -88,7 +97,14 @@ function PrivyAuthProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [ready, authenticated, user, getAccessToken]);
+  }, [
+    ready,
+    authenticated,
+    user,
+    solanaReady,
+    solanaWallets.length,
+    getAccessToken,
+  ]);
 
   const signIn = useCallback(() => login(), [login]);
   const signOut = useCallback(() => {
