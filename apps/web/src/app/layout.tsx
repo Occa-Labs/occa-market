@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { AppPrivyProvider } from "@/components/auth/app-privy-provider";
+import { AuthProvider } from "@/components/auth/auth-provider";
 
 // KH Teka Mono — primary UI / body / HUD voice.
 const mono = localFont({
@@ -39,7 +41,11 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${mono.variable} ${display.variable}`}>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <AppPrivyProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </AppPrivyProvider>
+      </body>
     </html>
   );
 }

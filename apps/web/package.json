@@ -12,6 +12,7 @@
   "dependencies": {
     "@occa-market/shared": "workspace:*",
     "@paper-design/shaders": "^0.0.76",
+    "@privy-io/react-auth": "^3.28.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.21.0",
     "next": "16.2.4",

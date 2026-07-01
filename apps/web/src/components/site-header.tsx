@@ -6,7 +6,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import type { ComponentType } from "react";
-import { LiquidMetalButton } from "@/components/ui/liquid-metal-button";
+import { AuthButton } from "@/components/auth/auth-button";
 
 export function SiteHeader() {
   return (
@@ -35,7 +35,7 @@ export function SiteHeader() {
           </div>
 
           <div className="flex items-center gap-4">
-            <LiquidMetalButton label="Sign in" />
+            <AuthButton />
           </div>
         </div>
 

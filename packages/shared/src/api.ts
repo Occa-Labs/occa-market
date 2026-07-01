@@ -6,6 +6,7 @@
 */
 
 import type { AgentCategory, AgentDetail, MarketAgent } from "./agent";
+import type { AuthUser } from "./auth";
 import type { OutputBlock } from "./output";
 
 /** One prior turn of chat, oldest first, for model context. */
@@ -51,3 +52,9 @@ export type CreateAgentRequest = {
 
 /** POST /api/agents response. */
 export type AgentCreatedResponse = { agent: MarketAgent };
+
+/** POST /api/auth/privy body — exchange a Privy access token for our session. */
+export type PrivyLoginRequest = { accessToken: string };
+
+/** POST /api/auth/privy and GET /api/auth/me response. */
+export type AuthResponse = { token: string; user: AuthUser };

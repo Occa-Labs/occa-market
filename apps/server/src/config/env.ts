@@ -25,6 +25,12 @@ const envSchema = z.object({
   RUNTIME_MAX_TOKENS: z.coerce.number().int().positive().default(1024),
   WELCOME_CREDIT: z.coerce.number().nonnegative().default(0.5),
   ALLOWED_AGENTS: z.string().default("degen-scout"),
+  // Auth. JWT_SECRET signs our own session token (required, fail-fast).
+  // Privy creds are optional so the app boots without them; the Privy login
+  // route errors only when actually hit unconfigured.
+  JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
+  PRIVY_APP_ID: z.string().min(1).optional(),
+  PRIVY_APP_SECRET: z.string().min(1).optional(),
 });
 
 function loadEnv() {
@@ -45,6 +51,9 @@ function loadEnv() {
     runtimeMaxTokens: e.RUNTIME_MAX_TOKENS,
     welcomeCredit: e.WELCOME_CREDIT,
     allowedAgents: csv(e.ALLOWED_AGENTS),
+    jwtSecret: e.JWT_SECRET,
+    privyAppId: e.PRIVY_APP_ID,
+    privyAppSecret: e.PRIVY_APP_SECRET,
   } as const;
 }
 

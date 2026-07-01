@@ -14,8 +14,26 @@ import {
   pgTable,
   text,
   timestamp,
+  uuid,
 } from "drizzle-orm/pg-core";
 import type { AgentCategory, AgentDetail, AgentStatus } from "@occa-market/shared";
+
+/*
+  Users — identity is the Privy DID (stable across wallet + email login).
+  Wallet and email are captured from the Privy account on login and refreshed
+  each time; either may be null depending on how the user signed in.
+*/
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  privyDid: text("privy_did").notNull().unique(),
+  walletAddress: text("wallet_address"),
+  email: text("email"),
+  name: text("name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type UserRow = typeof users.$inferSelect;
+export type NewUserRow = typeof users.$inferInsert;
 
 export const agents = pgTable("agents", {
   id: text("id").primaryKey(),

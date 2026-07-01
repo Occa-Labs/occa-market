@@ -8,6 +8,8 @@ import type {
   AgentCreatedResponse,
   AgentDetailResponse,
   AgentListResponse,
+  AuthResponse,
+  AuthUser,
   CreateAgentRequest,
   MarketAgent,
   MarketStats,
@@ -17,6 +19,27 @@ import type {
 import { config } from "./config";
 
 const base = config.apiBaseUrl;
+
+// ── Session token (our JWT, minted after Privy login) ──────────────────────
+const TOKEN_KEY = "occa_market_jwt";
+
+export function getStoredToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(TOKEN_KEY);
+}
+
+export function setStoredToken(token: string): void {
+  if (typeof window !== "undefined") window.localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearStoredToken(): void {
+  if (typeof window !== "undefined") window.localStorage.removeItem(TOKEN_KEY);
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getStoredToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 // RSC fetches must not be cached — the catalog is live data, not build output.
 async function getJson<T>(path: string): Promise<T> {
@@ -57,6 +80,31 @@ export async function createAgent(
   }
   const data = await res.json().catch(() => ({ error: "publish failed" }));
   return { ok: false, error: data.error ?? "publish failed" };
+}
+
+// ── Auth ───────────────────────────────────────────────────────────────────
+
+/** Exchange a Privy access token for our session (JWT + user). */
+export async function privyLogin(accessToken: string): Promise<AuthResponse> {
+  const res = await fetch(`${base}/api/auth/privy`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ accessToken }),
+  });
+  if (!res.ok) throw new Error(`login failed: ${res.status}`);
+  return res.json() as Promise<AuthResponse>;
+}
+
+/** Current user from the stored session token, or null if unauthenticated. */
+export async function fetchMe(): Promise<AuthUser | null> {
+  const res = await fetch(`${base}/api/auth/me`, {
+    headers: authHeaders(),
+    cache: "no-store",
+  });
+  if (res.status === 401) return null;
+  if (!res.ok) throw new Error(`me failed: ${res.status}`);
+  const data = (await res.json()) as { user: AuthUser };
+  return data.user;
 }
 
 export async function sendMessage(
