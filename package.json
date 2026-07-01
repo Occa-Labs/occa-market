@@ -1,0 +1,23 @@
+{
+  "name": "occa-market",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n server,web -c cyan,magenta \"pnpm --filter @occa-market/server dev\" \"pnpm --filter @occa-market/web dev\"",
+    "dev:web": "pnpm --filter @occa-market/web dev",
+    "dev:server": "pnpm --filter @occa-market/server dev",
+    "build": "pnpm --filter @occa-market/server build && pnpm --filter @occa-market/web build",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @occa-market/server db:generate",
+    "db:migrate": "pnpm --filter @occa-market/server db:migrate",
+    "db:seed": "pnpm --filter @occa-market/server db:seed",
+    "lint": "pnpm --filter @occa-market/web lint",
+    "start": "concurrently -n server,web -c cyan,magenta \"pnpm --filter @occa-market/server start\" \"pnpm --filter @occa-market/web start\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "sharp", "unrs-resolver"]
+  }
+}

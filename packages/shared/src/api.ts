@@ -1,0 +1,53 @@
+/*
+  HTTP wire contracts — the request/response shapes the server speaks and the
+  web client consumes. Plain types only; request *validation* (zod) lives in
+  the server's feature domain, mirroring OCCA's split (shared = wire types,
+  feature/domain = zod schemas).
+*/
+
+import type { AgentCategory, AgentDetail, MarketAgent } from "./agent";
+import type { OutputBlock } from "./output";
+
+/** One prior turn of chat, oldest first, for model context. */
+export type ChatTurn = { role: "user" | "agent"; text: string };
+
+/** POST /api/agents/:id/messages body. */
+export type SendMessageRequest = {
+  message: string;
+  sessionKey?: string;
+  turn?: number;
+  history?: ChatTurn[];
+};
+
+export type MessageUsage = { costUsd: number };
+
+/** POST /api/agents/:id/messages response (and the runtime's return shape). */
+export type RuntimeResult =
+  | { ok: true; blocks: OutputBlock[]; usage: MessageUsage }
+  | { ok: false; error: string };
+
+/** GET /api/agents response. */
+export type AgentListResponse = { agents: MarketAgent[] };
+
+/** An agent paired with its detail record. */
+export type AgentWithDetail = { agent: MarketAgent; detail: AgentDetail };
+
+/** GET /api/agents/:id response. */
+export type AgentDetailResponse = AgentWithDetail;
+
+/** POST /api/agents body — the public-facing fields a provider publishes. */
+export type CreateAgentRequest = {
+  name: string;
+  handle: string;
+  glyph: string;
+  category: AgentCategory;
+  tagline: string;
+  persona: string;
+  pricePerMsg: number;
+  skills: string[];
+  tools: string[];
+  workflow: string[];
+};
+
+/** POST /api/agents response. */
+export type AgentCreatedResponse = { agent: MarketAgent };

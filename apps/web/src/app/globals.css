@@ -1,0 +1,138 @@
+@import "tailwindcss";
+
+/*
+  OCCA Open Market — design system.
+  Clerk-inspired refined dark: near-black neutral, monochrome-first,
+  depth through subtle surface gradients + hairline borders + a lit
+  top edge. See CLAUDE.md for the full brand & design system.
+*/
+
+@theme {
+  --color-bg: #131316;
+  --color-bg-edge: #0e0e10;
+  --color-surface: #212126;
+  --color-surface-2: #2b2b31;
+  --color-surface-top: #26262c;
+  --color-fg: #f4f4f5;
+  --color-muted: #8a8d93;
+  --color-faint: #5a5d63;
+  --color-line: rgba(255, 255, 255, 0.07);
+  --color-line-strong: rgba(255, 255, 255, 0.12);
+  --color-highlight: rgba(255, 255, 255, 0.05);
+  --color-accent: #2ee6d6;
+  --color-on-accent: #05130f;
+  --color-warn: #f5a524;
+  --color-bad: #f04438;
+
+  --font-mono: var(--font-mono-src), ui-monospace, "SF Mono", Menlo, monospace;
+  --font-display: var(--font-display-src), ui-sans-serif, system-ui, sans-serif;
+}
+
+* {
+  border-color: var(--color-line);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  /* KH Teka (sans) is the primary voice; mono is reserved for data. */
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+  /* faint radial lighting from center-top, falling off to the edges */
+  background-image: radial-gradient(
+    120% 80% at 50% -10%,
+    rgba(255, 255, 255, 0.035),
+    transparent 60%
+  );
+  background-attachment: fixed;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-line-strong);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+/* Eyebrow / HUD label — mono, uppercase, faint. Data voice only. */
+.eyebrow {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.65rem;
+  color: var(--color-faint);
+}
+
+/*
+  Standard premium card surface.
+  Low-contrast fill, subtle vertical gradient, hairline border, and a
+  1px lit top edge. The border does the separating, not brightness.
+*/
+.surface-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background-image: linear-gradient(
+    180deg,
+    var(--color-surface-top),
+    var(--color-surface)
+  );
+  border-radius: 20px;
+  /*
+    Clerk-style edge: drawn entirely with inset box-shadow, not a border.
+    A full 1px ring + a brighter 1px top line reads as lit-from-within
+    rather than outlined, and takes no layout space.
+  */
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.07),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.045),
+    0 1px 2px rgba(0, 0, 0, 0.4);
+}
+.surface-card:hover {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.09),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+    0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* Soft radial spotlight to sit an illustration/icon on. */
+.spotlight {
+  background-image: radial-gradient(
+    60% 60% at 50% 40%,
+    rgba(255, 255, 255, 0.06),
+    transparent 70%
+  );
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+.live-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
+}
