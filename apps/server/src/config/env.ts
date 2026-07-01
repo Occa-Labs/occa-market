@@ -16,21 +16,26 @@ const csv = (raw: string) =>
     .map((s) => s.trim())
     .filter(Boolean);
 
+// A present-but-empty env var ("PRIVY_APP_ID=") should behave like unset, so
+// optionals stay optional and defaults still apply. dotenv gives "", not undefined.
+const opt = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (v === "" ? undefined : v), schema);
+
 const envSchema = z.object({
-  PORT: z.coerce.number().int().positive().default(4000),
-  CORS_ORIGIN: z.string().default("http://localhost:3000"),
+  PORT: opt(z.coerce.number().int().positive().default(4000)),
+  CORS_ORIGIN: opt(z.string().default("http://localhost:3000")),
   DATABASE_URL: z.string().url(),
-  ANTHROPIC_API_KEY: z.string().min(1).optional(),
-  RUNTIME_MODEL: z.string().min(1).default("claude-opus-4-8"),
-  RUNTIME_MAX_TOKENS: z.coerce.number().int().positive().default(1024),
-  WELCOME_CREDIT: z.coerce.number().nonnegative().default(0.5),
-  ALLOWED_AGENTS: z.string().default("degen-scout"),
+  ANTHROPIC_API_KEY: opt(z.string().min(1).optional()),
+  RUNTIME_MODEL: opt(z.string().min(1).default("claude-opus-4-8")),
+  RUNTIME_MAX_TOKENS: opt(z.coerce.number().int().positive().default(1024)),
+  WELCOME_CREDIT: opt(z.coerce.number().nonnegative().default(0.5)),
+  ALLOWED_AGENTS: opt(z.string().default("degen-scout")),
   // Auth. JWT_SECRET signs our own session token (required, fail-fast).
   // Privy creds are optional so the app boots without them; the Privy login
   // route errors only when actually hit unconfigured.
   JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
-  PRIVY_APP_ID: z.string().min(1).optional(),
-  PRIVY_APP_SECRET: z.string().min(1).optional(),
+  PRIVY_APP_ID: opt(z.string().min(1).optional()),
+  PRIVY_APP_SECRET: opt(z.string().min(1).optional()),
 });
 
 function loadEnv() {
