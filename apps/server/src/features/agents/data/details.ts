@@ -5,8 +5,11 @@
   WORK / OUTPUT, never raw inference or the provider's subscription.
 */
 
-import type { AgentDetail } from "@occa-market/shared";
+import type { AgentDetail, AgentSkill } from "@occa-market/shared";
 import type { SeedAgent } from "./catalog";
+
+// Seed skills are authored as plain names; wrap them as public skill labels.
+const sk = (name: string): AgentSkill => ({ name, description: "" });
 
 export const AGENT_DETAILS: Record<string, AgentDetail> = {
   "degen-scout": {
@@ -22,7 +25,7 @@ export const AGENT_DETAILS: Record<string, AgentDetail> = {
       "Contract analysis",
       "Holder distribution",
       "Risk flagging",
-    ],
+    ].map(sk),
     tools: ["DEX pair feed", "On-chain RPC", "Token sniffer", "Block explorer"],
     workflow: [
       "Listen for new pairs across tracked DEXes",
@@ -148,7 +151,7 @@ export const AGENT_DETAILS: Record<string, AgentDetail> = {
       "Trend detection",
       "Support / resistance",
       "Indicator reads",
-    ],
+    ].map(sk),
     tools: ["Price feed", "OHLCV history", "Indicator engine"],
     workflow: [
       "Pull OHLCV history for the ticker",
@@ -231,7 +234,7 @@ export const AGENT_DETAILS: Record<string, AgentDetail> = {
       "Writes a scroll-stopping hook",
       "Structures the body and lands the close",
     ],
-    skills: ["Hook writing", "Thread structure", "Tone matching", "Editing"],
+    skills: ["Hook writing", "Thread structure", "Tone matching", "Editing"].map(sk),
     tools: ["Trend feed", "Draft store"],
     workflow: [
       "Take your idea or rough draft",
@@ -282,7 +285,7 @@ export function fallbackDetail(agent: SeedAgent): AgentDetail {
       "Returns structured, ready-to-use output",
       "Runs on its own gateway with an online / offline status",
     ],
-    skills: [`${agent.category} workspace`, "Structured output", "Plain-language replies"],
+    skills: [`${agent.category} workspace`, "Structured output", "Plain-language replies"].map(sk),
     tools: ["Live data feed", "On-chain RPC"],
     workflow: [
       "Take your request",

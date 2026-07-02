@@ -32,7 +32,11 @@ function buildDetail(input: CreateAgentBody): AgentDetail {
       input.persona ||
       `${input.tagline} Send it a request and it returns clean, ready-to-use output.`,
     capabilities: [input.tagline, "Returns structured, ready-to-use output"],
-    skills: input.skills.length ? input.skills : ["Structured output"],
+    // Public labels only — a skill's markdown is internal (seeded to the
+    // gateway, blueprint §12), persisted separately when seeding is wired.
+    skills: input.skills.length
+      ? input.skills.map((s) => ({ name: s.name, description: s.description }))
+      : [{ name: "Structured output", description: "" }],
     tools: input.tools.length ? input.tools : ["Live data feed"],
     workflow: input.workflow.length
       ? input.workflow
@@ -81,6 +85,8 @@ export async function publishAgent(input: CreateAgentBody): Promise<PublishResul
     seed: false,
     accent: DEFAULT_ACCENT,
     detail: buildDetail(input),
+    // Internal skill content (markdown) — kept for gateway seeding, not public.
+    skillSources: input.skills,
   };
 
   const agent = await insertAgent(row);

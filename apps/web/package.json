@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@base-ui/react": "^1.6.0",
     "@occa-market/shared": "workspace:*",
     "@paper-design/shaders": "^0.0.76",
     "@privy-io/react-auth": "^3.28.0",

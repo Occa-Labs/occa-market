@@ -1,25 +1,39 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, Check, Loader2, Plus, X } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Popover } from "@base-ui/react/popover";
+import { Select } from "@base-ui/react/select";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  ChevronDown,
+  Loader2,
+  Plus,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import {
   CATEGORIES,
   type AgentCategory,
   type MarketAgent,
 } from "@occa-market/shared";
-import { createAgent, getAgentDetail } from "@/lib/api";
+import { createAgent, getAgentDetail, importSkill } from "@/lib/api";
 import {
   draftFromTemplate,
   draftToPreview,
   emptyDraft,
   handleFromName,
+  makeExternalId,
+  parseSkillMarkdown,
   type DraftAgent,
 } from "@/lib/builder";
 import {
   ADAPTERS,
-  SKILL_LIBRARY,
+  ICON_GLYPHS,
   TOOL_LIBRARY,
   type AdapterType,
+  type DraftSkill,
 } from "@/lib/builder-options";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,6 +48,11 @@ const STEPS = [
   "Review",
 ];
 
+// Persist the in-progress draft so a reload doesn't wipe the form.
+const DRAFT_STORAGE_KEY = "occa_market_build_draft";
+
+type PersistedDraft = { draft: DraftAgent; step: number };
+
 type Update = (patch: Partial<DraftAgent>) => void;
 
 export function AgentBuilder({ templates }: { templates: MarketAgent[] }) {
@@ -42,9 +61,49 @@ export function AgentBuilder({ templates }: { templates: MarketAgent[] }) {
   const [published, setPublished] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Gate persistence until we've hydrated, so the first save can't clobber a
+  // stored draft with the empty default before hydration runs.
+  const [hydrated, setHydrated] = useState(false);
 
   const update: Update = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const last = STEPS.length - 1;
+
+  // Hydrate once from localStorage (client-only, so it can't cause an SSR
+  // mismatch — the server and first client render both start from emptyDraft).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw) as Partial<PersistedDraft>;
+        if (saved.draft) {
+          setDraft({
+            ...emptyDraft(),
+            ...saved.draft,
+            // never restore a secret or a stale "connected" status
+            apiKey: "",
+            connection: "idle",
+          });
+        }
+        if (typeof saved.step === "number") {
+          setStep(Math.min(Math.max(saved.step, 0), STEPS.length - 1));
+        }
+      }
+    } catch {
+      /* corrupt or unavailable storage — start fresh */
+    }
+    setHydrated(true);
+  }, []);
+
+  // Persist on every change once hydrated. Drop the API key from what we store.
+  useEffect(() => {
+    if (!hydrated || published) return;
+    try {
+      const payload: PersistedDraft = { draft: { ...draft, apiKey: "" }, step };
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+      /* storage full or blocked — persistence is best-effort */
+    }
+  }, [draft, step, hydrated, published]);
 
   const canPublish =
     draft.name.trim().length > 0 &&
@@ -63,13 +122,22 @@ export function AgentBuilder({ templates }: { templates: MarketAgent[] }) {
       tagline: draft.tagline,
       persona: draft.persona,
       pricePerMsg: draft.pricePerMsg,
-      skills: draft.skills.map((s) => s.name),
+      // DraftSkill already matches AgentSkillInput (name, description, markdown,
+      // source); send the whole skill so its content reaches the server.
+      skills: draft.skills,
       tools: draft.tools,
       workflow: draft.workflow,
     });
     setPublishing(false);
-    if (res.ok) setPublished(true);
-    else setError(res.error);
+    if (res.ok) {
+      setPublished(true);
+      // draft is submitted — don't leave it lingering for the next build
+      try {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+      } catch {
+        /* ignore */
+      }
+    } else setError(res.error);
   }
 
   if (published) {
@@ -92,8 +160,8 @@ export function AgentBuilder({ templates }: { templates: MarketAgent[] }) {
         Build your agent
       </h1>
       <p className="mt-2 max-w-xl font-mono text-xs leading-relaxed text-muted">
-        Configure the agent and the gateway that powers it. The two are bound
-        together, they go live and offline as one.
+        Configure the agent and the gateway that powers it. A gateway runs on
+        your own host and can power several of your agents — they share its uptime.
       </p>
 
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[200px_1fr]">
@@ -168,32 +236,58 @@ function Stepper({
   onJump: (i: number) => void;
 }) {
   return (
-    <ol className="flex gap-2 overflow-x-auto lg:flex-col lg:gap-0">
+    <ol className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:gap-0 lg:overflow-visible lg:pb-0">
       {STEPS.map((label, i) => {
         const done = i < current;
         const active = i === current;
+        const isLast = i === STEPS.length - 1;
         return (
-          <li key={label} className="flex-none lg:flex-1">
+          <li key={label} className="relative flex-none lg:flex-1">
+            {/* connector into this step — green once the previous step is done */}
+            {i > 0 && (
+              <span
+                aria-hidden
+                className={`absolute left-5 top-0 hidden h-1/2 w-px -translate-x-1/2 transition-colors lg:block ${
+                  i - 1 < current ? "bg-accent" : "bg-line"
+                }`}
+              />
+            )}
+            {/* connector out of this step — green once this step is done */}
+            {!isLast && (
+              <span
+                aria-hidden
+                className={`absolute bottom-0 left-5 hidden h-1/2 w-px -translate-x-1/2 transition-colors lg:block ${
+                  done ? "bg-accent" : "bg-line"
+                }`}
+              />
+            )}
             <button
               type="button"
               onClick={() => onJump(i)}
-              className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors ${
-                active ? "bg-surface-2" : "hover:bg-surface-2/60"
+              className={`flex h-full w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors ${
+                active ? "lg:bg-surface-2" : "hover:bg-surface-2/60"
               }`}
             >
+              {/* z-10 + solid fill so the node masks the connector passing behind it */}
               <span
-                className={`flex h-5 w-5 flex-none items-center justify-center rounded-full border font-mono text-[0.6rem] ${
-                  active
-                    ? "border-fg/30 bg-surface-2 text-fg"
-                    : done
-                      ? "border-line-strong text-accent"
-                      : "border-line text-faint"
+                className={`relative z-10 flex h-5 w-5 flex-none items-center justify-center rounded-full border font-mono text-[0.6rem] transition-colors ${
+                  done
+                    ? "border-accent bg-accent"
+                    : active
+                      ? "border-fg/30 bg-surface-2 text-fg"
+                      : "border-line bg-bg text-faint"
                 }`}
               >
-                {done ? <Check size={11} /> : i + 1}
+                {done ? (
+                  // dark glyph on the accent fill — hex is explicit so contrast
+                  // never falls back to an inherited light color
+                  <Check size={12} strokeWidth={3} className="text-[#05130f]" />
+                ) : (
+                  i + 1
+                )}
               </span>
               <span
-                className={`text-xs ${active ? "text-fg" : done ? "text-muted" : "text-faint"}`}
+                className={`text-xs transition-colors ${active ? "text-fg" : done ? "text-muted" : "text-faint"}`}
               >
                 {label}
               </span>
@@ -296,14 +390,13 @@ function IdentityStep({ draft, update }: { draft: DraftAgent; update: Update }) 
             }
           />
         </Field>
-        <Field label="Glyph">
-          <TextInput
+        <div>
+          <span className="eyebrow mb-2 block">Icon</span>
+          <IconPicker
             value={draft.glyph}
-            maxLength={2}
-            className="text-center"
-            onChange={(e) => update({ glyph: e.target.value })}
+            onSelect={(glyph) => update({ glyph })}
           />
-        </Field>
+        </div>
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -372,6 +465,23 @@ function IdentityStep({ draft, update }: { draft: DraftAgent; update: Update }) 
 /* ── Step 3 · Gateway ─────────────────────────────────────────── */
 
 function GatewayStep({ draft, update }: { draft: DraftAgent; update: Update }) {
+  const adapter = ADAPTERS.find((a) => a.type === draft.adapterType);
+  // Always keep the current model selectable, even if a forked template carried
+  // one that isn't in this adapter's list.
+  const adapterModels = adapter?.models ?? [];
+  const modelOptions =
+    draft.model && !adapterModels.includes(draft.model)
+      ? [draft.model, ...adapterModels]
+      : adapterModels;
+
+  // Auto-assign a unique gateway id once, derived from the handle/name. Guarded
+  // on empty so it stays stable across edits and reloads (persisted with the draft).
+  useEffect(() => {
+    if (!draft.externalAgentId && (draft.handle || draft.name)) {
+      update({ externalAgentId: makeExternalId(draft.handle || draft.name) });
+    }
+  }, [draft.externalAgentId, draft.handle, draft.name, update]);
+
   function test() {
     if (!draft.gatewayUrl.trim()) {
       update({ connection: "fail" });
@@ -384,31 +494,53 @@ function GatewayStep({ draft, update }: { draft: DraftAgent; update: Update }) {
   return (
     <StepShell
       title="Gateway & adapter"
-      hint="The runtime that powers this agent. It runs on your own host and is bound to this one agent only."
+      hint="The runtime that powers this agent, running on your own host. One gateway can host several of your agents, each in its own workspace."
     >
       <p className="eyebrow mb-2">Adapter</p>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {ADAPTERS.map((a) => (
-          <button
-            key={a.type}
-            type="button"
-            onClick={() =>
-              update({
-                adapterType: a.type as AdapterType,
-                model: a.defaultModel,
-                connection: "idle",
-              })
-            }
-            className={`rounded-xl border bg-surface-2 px-3.5 py-3 text-left transition-colors hover:border-line-strong ${
-              draft.adapterType === a.type ? "border-fg/25" : "border-line"
-            }`}
-          >
-            <p className="text-sm font-semibold text-fg">{a.name}</p>
-            <p className="mt-0.5 font-mono text-[0.7rem] leading-relaxed text-muted">
-              {a.blurb}
-            </p>
-          </button>
-        ))}
+        {ADAPTERS.map((a) => {
+          const selected = draft.adapterType === a.type;
+          return (
+            <button
+              key={a.type}
+              type="button"
+              aria-pressed={selected}
+              onClick={() =>
+                update({
+                  adapterType: a.type as AdapterType,
+                  model: a.defaultModel,
+                  connection: "idle",
+                })
+              }
+              className={`rounded-xl border p-3.5 text-left transition-colors ${
+                selected
+                  ? "border-accent bg-surface-2"
+                  : "border-line bg-surface hover:border-line-strong hover:bg-surface-2"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-fg">{a.name}</p>
+                {/* radio-style mark: hollow when unpicked, accent-filled when picked */}
+                <span
+                  className={`flex h-4.5 w-4.5 flex-none items-center justify-center rounded-full border transition-colors ${
+                    selected ? "border-accent bg-accent" : "border-line-strong"
+                  }`}
+                >
+                  {selected && (
+                    <Check
+                      size={11}
+                      strokeWidth={3}
+                      className="text-[#05130f]"
+                    />
+                  )}
+                </span>
+              </div>
+              <p className="mt-1 font-mono text-[0.7rem] leading-relaxed text-muted">
+                {a.blurb}
+              </p>
+            </button>
+          );
+        })}
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -430,17 +562,37 @@ function GatewayStep({ draft, update }: { draft: DraftAgent; update: Update }) {
           />
         </Field>
         <Field label="Model">
-          <TextInput
+          <ModelSelect
             value={draft.model}
-            onChange={(e) => update({ model: e.target.value })}
+            models={modelOptions}
+            onSelect={(m) => update({ model: m })}
           />
         </Field>
-        <Field label="External agent ID">
-          <TextInput
-            value={draft.externalAgentId}
-            placeholder="agt_…"
-            onChange={(e) => update({ externalAgentId: e.target.value })}
-          />
+        <Field
+          label="External agent ID"
+          hint="Auto-generated and unique. Your gateway uses it to namespace this agent."
+        >
+          <div className="flex gap-2">
+            <input
+              readOnly
+              value={draft.externalAgentId}
+              placeholder="agt_…"
+              aria-label="External agent ID (auto-generated)"
+              className="h-10 flex-1 rounded-xl border border-line bg-surface-2 px-3.5 font-mono text-sm text-muted select-all placeholder:text-faint focus:outline-none"
+            />
+            <Button
+              variant="secondary"
+              size="md"
+              aria-label="Regenerate ID"
+              onClick={() =>
+                update({
+                  externalAgentId: makeExternalId(draft.handle || draft.name),
+                })
+              }
+            >
+              <RefreshCw size={14} />
+            </Button>
+          </div>
         </Field>
       </div>
 
@@ -457,8 +609,9 @@ function GatewayStep({ draft, update }: { draft: DraftAgent; update: Update }) {
       </div>
 
       <p className="mt-5 rounded-xl border border-line bg-surface-2 px-3.5 py-3 font-mono text-[0.7rem] leading-relaxed text-faint">
-        Bound 1:1. This gateway powers only this agent. There is no pooling, and
-        if the gateway goes down the agent shows offline until it is back.
+        One gateway can host several of your own agents, each in its own isolated
+        workspace. No cross-provider pooling: an agent only ever runs on your
+        gateway, and if it goes down every agent on it shows offline until it is back.
       </p>
     </StepShell>
   );
@@ -486,78 +639,226 @@ function ConnectionBadge({ status }: { status: DraftAgent["connection"] }) {
   return <span className="font-mono text-xs text-faint">Not tested</span>;
 }
 
+function ModelSelect({
+  value,
+  models,
+  onSelect,
+}: {
+  value: string;
+  models: string[];
+  onSelect: (model: string) => void;
+}) {
+  return (
+    <Select.Root value={value} onValueChange={(v) => onSelect(v as string)}>
+      <Select.Trigger className="flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-line bg-surface-2 px-3.5 font-mono text-sm text-fg transition-colors hover:border-line-strong focus-visible:border-line-strong focus-visible:outline-none data-[popup-open]:border-line-strong">
+        <Select.Value />
+        <Select.Icon className="flex text-faint">
+          <ChevronDown size={14} />
+        </Select.Icon>
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Positioner
+          side="bottom"
+          align="start"
+          sideOffset={8}
+          className="z-50"
+        >
+          {/* surface-card on the Popup (inner), not the Positioner — same reason
+              as the icon picker: keep its position:relative off the positioner. */}
+          <Select.Popup className="surface-card max-h-64 w-[var(--anchor-width)] overflow-y-auto rounded-xl p-1 outline-none">
+            <Select.List>
+              {models.map((m) => (
+                <Select.Item
+                  key={m}
+                  value={m}
+                  className="flex cursor-pointer select-none items-center justify-between gap-2 rounded-lg px-3 py-2 font-mono text-sm text-muted outline-none transition-colors data-[highlighted]:bg-surface-2 data-[highlighted]:text-fg data-[selected]:text-fg"
+                >
+                  <Select.ItemText>{m}</Select.ItemText>
+                  <Select.ItemIndicator className="flex text-accent">
+                    <Check size={13} strokeWidth={3} />
+                  </Select.ItemIndicator>
+                </Select.Item>
+              ))}
+            </Select.List>
+          </Select.Popup>
+        </Select.Positioner>
+      </Select.Portal>
+    </Select.Root>
+  );
+}
+
 /* ── Step 4 · Skills ──────────────────────────────────────────── */
 
 function SkillsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
+  const [mode, setMode] = useState<"write" | "repo">("write");
   const [name, setName] = useState("");
+  const [markdown, setMarkdown] = useState("");
+  const [source, setSource] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
-  function add(skillName: string) {
-    const n = skillName.trim();
-    if (!n || draft.skills.some((s) => s.name === n)) return;
-    update({ skills: [...draft.skills, { name: n, description: "" }] });
-    setName("");
+  function tryAdd(skill: DraftSkill): boolean {
+    if (!skill.name || draft.skills.some((s) => s.name === skill.name)) return false;
+    update({ skills: [...draft.skills, skill] });
+    return true;
   }
+
+  function addWritten() {
+    const body = markdown.trim();
+    // Prefer an explicit name; otherwise read it from the SKILL.md frontmatter.
+    const parsed = parseSkillMarkdown(body);
+    const finalName = (name.trim() || parsed.name).trim();
+    if (tryAdd({ name: finalName, description: parsed.description, markdown: body, source: "markdown" })) {
+      setName("");
+      setMarkdown("");
+    }
+  }
+
+  async function importFromRepo() {
+    const src = source.trim();
+    if (!src || importing) return;
+    setImporting(true);
+    setImportError(null);
+    const res = await importSkill(src);
+    setImporting(false);
+    if (!res.ok) {
+      setImportError(res.error);
+      return;
+    }
+    if (!tryAdd(res.skill)) {
+      setImportError(`"${res.skill.name}" is already added.`);
+      return;
+    }
+    setSource("");
+  }
+
+  const canWrite = markdown.trim().length > 0 || name.trim().length > 0;
 
   return (
     <StepShell
       title="Skills"
-      hint="What the agent can do. Skills are seeded to the gateway as workspace files."
+      hint="What the agent can do. You bring each skill — paste its SKILL.md or import it from a public GitHub repo. The instructions get seeded to the gateway workspace."
     >
-      <div className="flex flex-wrap gap-2">
+      {/* added skills */}
+      <div className="flex flex-col gap-2">
         {draft.skills.length === 0 && (
           <p className="font-mono text-xs text-faint">No skills yet.</p>
         )}
         {draft.skills.map((s) => (
-          <span
+          <div
             key={s.name}
-            className="flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 font-mono text-xs text-muted"
+            className="flex items-start justify-between gap-3 rounded-xl border border-line bg-surface-2 px-3.5 py-2.5"
           >
-            {s.name}
+            <div className="min-w-0">
+              <p className="font-mono text-sm text-fg">{s.name}</p>
+              {s.description && (
+                <p className="mt-0.5 truncate font-mono text-xs text-muted">
+                  {s.description}
+                </p>
+              )}
+              <p className="mt-1 font-mono text-[0.7rem] text-faint">
+                {s.markdown ? `${s.markdown.length} chars` : "no content"} · {s.source}
+              </p>
+            </div>
             <button
               type="button"
+              aria-label={`Remove ${s.name}`}
               onClick={() =>
                 update({ skills: draft.skills.filter((x) => x.name !== s.name) })
               }
-              className="text-faint transition-colors hover:text-fg"
+              className="mt-0.5 flex-none text-faint transition-colors hover:text-fg"
             >
-              <X size={11} />
+              <X size={13} />
             </button>
-          </span>
+          </div>
         ))}
       </div>
 
-      <div className="mt-5 flex gap-2">
-        <TextInput
-          value={name}
-          placeholder="Add a custom skill…"
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              add(name);
-            }
-          }}
-        />
-        <Button variant="secondary" size="md" onClick={() => add(name)}>
-          <Plus size={14} />
-        </Button>
-      </div>
+      {/* add a skill — write it or import from a repo */}
+      <div className="mt-5 rounded-xl border border-line bg-surface-2 p-3.5">
+        <div className="mb-3 inline-flex rounded-lg border border-line p-0.5">
+          {(["write", "repo"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={`rounded-md px-3 py-1 font-mono text-xs transition-colors ${
+                mode === m ? "bg-surface-2 text-fg" : "text-muted hover:text-fg"
+              }`}
+            >
+              {m === "write" ? "Write" : "Import from repo"}
+            </button>
+          ))}
+        </div>
 
-      <p className="eyebrow mb-2 mt-5">From the library</p>
-      <div className="flex flex-wrap gap-2">
-        {SKILL_LIBRARY.filter(
-          (lib) => !draft.skills.some((s) => s.name === lib.name),
-        ).map((lib) => (
-          <button
-            key={lib.name}
-            type="button"
-            onClick={() => add(lib.name)}
-            className="flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 font-mono text-xs text-muted transition-colors hover:border-line-strong hover:text-fg"
-          >
-            <Plus size={11} className="text-faint" />
-            {lib.name}
-          </button>
-        ))}
+        {mode === "write" ? (
+          <>
+            <TextInput
+              value={name}
+              placeholder="Skill name (optional — read from the frontmatter if blank)"
+              onChange={(e) => setName(e.target.value)}
+            />
+            <TextArea
+              value={markdown}
+              rows={7}
+              placeholder={
+                "Paste the skill's SKILL.md here…\n\n---\nname: risk-flagging\ndescription: Surfaces the obvious ways a token can hurt you.\n---\n\n# Instructions\n…"
+              }
+              className="mt-2"
+              onChange={(e) => setMarkdown(e.target.value)}
+            />
+            <div className="mt-2 flex justify-end">
+              <Button variant="secondary" size="md" disabled={!canWrite} onClick={addWritten}>
+                <Plus size={14} className="mr-1.5" />
+                Add skill
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <TextInput
+              value={source}
+              placeholder="owner/repo/slug or a github.com/…/tree/… URL"
+              onChange={(e) => {
+                setSource(e.target.value);
+                setImportError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void importFromRepo();
+                }
+              }}
+            />
+            <p className="mt-1.5 font-mono text-[0.7rem] leading-relaxed text-faint">
+              Points at a folder with a SKILL.md. Reads its name, description, and
+              instructions from the pinned commit.
+            </p>
+            {importError && (
+              <p className="mt-2 font-mono text-xs text-bad">{importError}</p>
+            )}
+            <div className="mt-2 flex justify-end">
+              <Button
+                variant="secondary"
+                size="md"
+                disabled={!source.trim() || importing}
+                onClick={importFromRepo}
+              >
+                {importing ? (
+                  <>
+                    <Loader2 size={14} className="mr-1.5 animate-spin" />
+                    Importing…
+                  </>
+                ) : (
+                  <>
+                    <Plus size={14} className="mr-1.5" />
+                    Import skill
+                  </>
+                )}
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </StepShell>
   );
@@ -865,6 +1166,56 @@ function Field({
         </span>
       )}
     </label>
+  );
+}
+
+function IconPicker({
+  value,
+  onSelect,
+}: {
+  value: string;
+  onSelect: (glyph: string) => void;
+}) {
+  // Controlled so we can close on select; Base UI handles outside-click, Escape,
+  // focus, and portalling (which escapes any ancestor overflow/stacking).
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger className="flex h-10 w-full items-center justify-center rounded-xl border border-line bg-surface-2 text-lg text-fg transition-colors hover:border-line-strong focus-visible:border-line-strong focus-visible:outline-none">
+        {value || "◇"}
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner
+          side="bottom"
+          align="end"
+          sideOffset={8}
+          className="z-50"
+        >
+          {/* .surface-card lives on the Popup (inner), not the Positioner, so its
+              position:relative can't fight Base UI's positioning transform. */}
+          <Popover.Popup className="surface-card grid grid-cols-6 gap-1 rounded-xl p-2 outline-none">
+            {ICON_GLYPHS.map((glyph) => (
+              <button
+                key={glyph}
+                type="button"
+                onClick={() => {
+                  onSelect(glyph);
+                  setOpen(false);
+                }}
+                className={`flex h-8 w-8 items-center justify-center rounded-lg border text-base transition-colors ${
+                  value === glyph
+                    ? "border-accent bg-surface-2 text-fg"
+                    : "border-transparent text-muted hover:border-line-strong hover:bg-surface-2 hover:text-fg"
+                }`}
+              >
+                {glyph}
+              </button>
+            ))}
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 

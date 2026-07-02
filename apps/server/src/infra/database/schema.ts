@@ -16,7 +16,12 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { AgentCategory, AgentDetail, AgentStatus } from "@occa-market/shared";
+import type {
+  AgentCategory,
+  AgentDetail,
+  AgentSkillInput,
+  AgentStatus,
+} from "@occa-market/shared";
 
 /*
   Users — identity is the Privy DID (stable across wallet + email login).
@@ -50,6 +55,9 @@ export const agents = pgTable("agents", {
   seed: boolean("seed").notNull().default(false),
   accent: text("accent").notNull(),
   detail: jsonb("detail").$type<AgentDetail>().notNull(),
+  // Internal: full skill content (SKILL.md markdown + source), seeded to the
+  // gateway workspace. Never exposed in the public catalog (blueprint §12).
+  skillSources: jsonb("skill_sources").$type<AgentSkillInput[]>().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -19,6 +19,17 @@ export const sendMessageBody = z.object({
 
 export type SendMessageBody = z.infer<typeof sendMessageBody>;
 
+// A skill the provider brings. `markdown` is the internal instruction content
+// (seeded to the gateway); the catalog only ever exposes name + description.
+export const skillInputSchema = z.object({
+  name: z.string().trim().min(1, "skill name is required"),
+  description: z.string().trim().default(""),
+  markdown: z.string().default(""),
+  source: z.enum(["markdown", "repo"]).default("markdown"),
+  repoUrl: z.string().url().optional(),
+  repoPath: z.string().optional(),
+});
+
 export const createAgentBody = z.object({
   name: z.string().trim().min(1, "name is required"),
   handle: z.string().trim().min(1, "handle is required"),
@@ -27,7 +38,7 @@ export const createAgentBody = z.object({
   tagline: z.string().trim().min(1, "tagline is required"),
   persona: z.string().trim().default(""),
   pricePerMsg: z.number().nonnegative().default(0),
-  skills: z.array(z.string()).default([]),
+  skills: z.array(skillInputSchema).default([]),
   tools: z.array(z.string()).default([]),
   workflow: z.array(z.string()).default([]),
 });

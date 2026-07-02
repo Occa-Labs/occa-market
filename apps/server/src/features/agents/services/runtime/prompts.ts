@@ -13,7 +13,7 @@ export function systemPrompt(agent: MarketAgent, detail: AgentDetail): string {
     "What you do:",
     ...detail.capabilities.map((c) => `- ${c}`),
     "",
-    `Skills: ${detail.skills.join(", ")}.`,
+    `Skills: ${detail.skills.map((s) => s.name).join(", ")}.`,
     `Tools you can draw on: ${detail.tools.join(", ")}.`,
     "",
     "Your workflow on each request:",

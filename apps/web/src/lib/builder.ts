@@ -3,10 +3,11 @@
   build, prefill, and preview a draft. UI-first: a draft lives in client state
   and "publish" is mocked.
 
-  Domain rules baked in (blueprint §2.1): a provider brings ONE gateway and ONE
-  agent, bound together. The runtime (gateway + adapter) and the agent workspace
-  (persona, skills, tools, workflow) are configured in the same flow because
-  they ship and die together.
+  Domain rules baked in (blueprint §2.1): a provider hosts their own gateway,
+  which can run several of their agents — each in an isolated workspace keyed by
+  externalAgentId. No cross-provider pooling: an agent runs only on its provider's
+  gateway and goes offline with it. The runtime (gateway + adapter) and the agent
+  workspace (persona, skills, tools, workflow) are configured in the same flow.
 
   Option libraries (adapters, tools, skills) live in ./builder-options.
 */
@@ -76,7 +77,12 @@ export function draftFromTemplate(
     tagline: agent.tagline,
     persona: detail.longDescription,
     pricePerMsg: agent.pricePerMsg,
-    skills: detail.skills.map((s) => ({ name: s, description: "" })),
+    skills: detail.skills.map((s) => ({
+      name: s.name,
+      description: s.description,
+      markdown: "",
+      source: "markdown" as const,
+    })),
     tools: detail.tools,
     workflow: detail.workflow,
   };
@@ -88,6 +94,44 @@ export function handleFromName(name: string): string {
     .trim()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_|_$/g, "");
+}
+
+/*
+  Stable, unique id for the agent on the provider's own gateway (namespaces the
+  workspace on their host). Readable slug from the handle/name, plus a random
+  suffix so two agents — even with the same name — can never collide. The server
+  should still be the final authority on uniqueness when publish is wired.
+*/
+export function makeExternalId(seed: string): string {
+  const slug =
+    seed
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 32) || "agent";
+  const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 10);
+  return `${slug}-${suffix}`;
+}
+
+/*
+  Pull `name` / `description` out of a SKILL.md YAML frontmatter block, so a
+  provider pasting a skill file doesn't have to retype them. Returns empty
+  strings when there's no frontmatter or the keys are absent.
+*/
+export function parseSkillMarkdown(md: string): {
+  name: string;
+  description: string;
+} {
+  const fm = md.match(/^---\s*\n([\s\S]*?)\n---/);
+  if (!fm) return { name: "", description: "" };
+  const unquote = (v: string) => v.trim().replace(/^["']|["']$/g, "");
+  const name = fm[1].match(/^name:\s*(.+)$/m);
+  const description = fm[1].match(/^description:\s*(.+)$/m);
+  return {
+    name: name ? unquote(name[1]) : "",
+    description: description ? unquote(description[1]) : "",
+  };
 }
 
 /** Build a catalog-card preview from the in-progress draft. */

@@ -114,10 +114,11 @@ export function AgentDetail({
               <div className="flex flex-wrap gap-2">
                 {detail.skills.map((skill) => (
                   <span
-                    key={skill}
+                    key={skill.name}
+                    title={skill.description || undefined}
                     className="rounded-full border border-line bg-surface-2 px-3 py-1 font-mono text-xs text-muted"
                   >
-                    {skill}
+                    {skill.name}
                   </span>
                 ))}
               </div>

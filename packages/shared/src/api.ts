@@ -5,7 +5,12 @@
   feature/domain = zod schemas).
 */
 
-import type { AgentCategory, AgentDetail, MarketAgent } from "./agent";
+import type {
+  AgentCategory,
+  AgentDetail,
+  AgentSkillInput,
+  MarketAgent,
+} from "./agent";
 import type { AuthUser } from "./auth";
 import type { OutputBlock } from "./output";
 
@@ -45,13 +50,20 @@ export type CreateAgentRequest = {
   tagline: string;
   persona: string;
   pricePerMsg: number;
-  skills: string[];
+  skills: AgentSkillInput[];
   tools: string[];
   workflow: string[];
 };
 
 /** POST /api/agents response. */
 export type AgentCreatedResponse = { agent: MarketAgent };
+
+/**
+ * POST /api/agents/skills/import — pull a skill's SKILL.md from a public GitHub
+ * repo. `source` is an "owner/repo/slug" shorthand or a github.com tree URL.
+ */
+export type SkillImportRequest = { source: string };
+export type SkillImportResponse = { skill: AgentSkillInput };
 
 /** POST /api/auth/privy body — exchange a Privy access token for our session. */
 export type PrivyLoginRequest = { accessToken: string };

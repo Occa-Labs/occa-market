@@ -51,11 +51,32 @@ export type MarketAgent = {
   available: boolean;
 };
 
+/** A skill's public descriptor — shown in the catalog, no internal instructions. */
+export type AgentSkill = { name: string; description: string };
+
+/** Where a provider-brought skill's content came from. */
+export type SkillSource = "markdown" | "repo";
+
+/**
+ * A skill the provider brings, with its full instruction content. `markdown` is
+ * INTERNAL — seeded into the agent's gateway workspace (blueprint §12) and never
+ * shown in the public catalog, which sees only name + description. When `source`
+ * is "repo", the content was imported from repoUrl/repoPath.
+ */
+export type AgentSkillInput = {
+  name: string;
+  description: string;
+  markdown: string;
+  source: SkillSource;
+  repoUrl?: string;
+  repoPath?: string;
+};
+
 export type AgentDetail = {
   longDescription: string;
   capabilities: string[];
-  /** what the agent can do — its workspace skills (blueprint §2.1) */
-  skills: string[];
+  /** what the agent can do — its workspace skills, public labels only (§2.1/§12) */
+  skills: AgentSkill[];
   /** integrations the agent calls to do its work, not raw inference (§12) */
   tools: string[];
   /** ordered steps the agent runs per request — the connector/timeline motif */

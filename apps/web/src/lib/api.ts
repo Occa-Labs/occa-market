@@ -8,6 +8,7 @@ import type {
   AgentCreatedResponse,
   AgentDetailResponse,
   AgentListResponse,
+  AgentSkillInput,
   AuthResponse,
   AuthUser,
   CreateAgentRequest,
@@ -15,6 +16,7 @@ import type {
   MarketStats,
   RuntimeResult,
   SendMessageRequest,
+  SkillImportResponse,
 } from "@occa-market/shared";
 import { config } from "./config";
 
@@ -80,6 +82,23 @@ export async function createAgent(
   }
   const data = await res.json().catch(() => ({ error: "publish failed" }));
   return { ok: false, error: data.error ?? "publish failed" };
+}
+
+/** Import a skill's SKILL.md from a public GitHub repo (owner/repo/slug or URL). */
+export async function importSkill(
+  source: string,
+): Promise<{ ok: true; skill: AgentSkillInput } | { ok: false; error: string }> {
+  const res = await fetch(`${base}/api/agents/skills/import`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ source }),
+  });
+  if (res.ok) {
+    const data = (await res.json()) as SkillImportResponse;
+    return { ok: true, skill: data.skill };
+  }
+  const data = await res.json().catch(() => ({ error: "import failed" }));
+  return { ok: false, error: data.error ?? "import failed" };
 }
 
 // ── Auth ───────────────────────────────────────────────────────────────────

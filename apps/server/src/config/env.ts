@@ -36,6 +36,9 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
   PRIVY_APP_ID: opt(z.string().min(1).optional()),
   PRIVY_APP_SECRET: opt(z.string().min(1).optional()),
+  // GitHub PAT for importing skills from public repos. Optional — anon GitHub
+  // API is 60 req/hr, a token raises it. Fine-grained, public repo read is enough.
+  GITHUB_TOKEN: opt(z.string().min(1).optional()),
 });
 
 function loadEnv() {
@@ -59,6 +62,7 @@ function loadEnv() {
     jwtSecret: e.JWT_SECRET,
     privyAppId: e.PRIVY_APP_ID,
     privyAppSecret: e.PRIVY_APP_SECRET,
+    githubToken: e.GITHUB_TOKEN,
   } as const;
 }
 
