@@ -2,7 +2,7 @@
 
 The single source of truth for how OCCA Open Market looks and feels. Loaded every session. When building or editing any UI in this project, follow this. If a request conflicts with it, flag the conflict before shipping.
 
-Product blueprint (what we're building, scope, economics): [../agent-marketplace-blueprint.md](../agent-marketplace-blueprint.md). Public-messaging guardrails live in its §12 — check before writing any user-facing marketing copy.
+Product blueprint (what we're building, scope, economics): [agent-marketplace-blueprint.md](agent-marketplace-blueprint.md). Token utility & economics: [agent-marketplace-token.md](agent-marketplace-token.md). Public-messaging guardrails live in the blueprint's §12 — check before writing any user-facing marketing copy.
 
 ## What this is
 

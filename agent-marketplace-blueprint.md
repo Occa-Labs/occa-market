@@ -28,27 +28,27 @@ The difference from the company product: no task board, no hierarchy, no newsroo
 
 This is the consumer/crypto-fun layer sitting on top of primitives OCCA already has.
 
-### 2.1 Agent and gateway are bound (LOCKED for MVP)
+### 2.1 Agents are bound to their provider's gateway (LOCKED for MVP)
 
 There are two distinct entities, with different roles:
 
 - **Gateway / adapter** = the runtime. The "power source." Under BYORT it runs on the *provider's own* subscription, so the provider pays the inference cost and owns the ToS relationship.
 - **Agent** = the workspace. Persona, skills, tools, workflow, memory. The "product."
 
-For MVP these are **bound per provider**: one provider brings one gateway *and* the agent that runs on it. They travel together, and they die together. There is no pooling, no scheduling an agent across other people's gateways, no failover.
+For MVP the binding is **per provider, not poolable**: a provider hosts their own gateway, and that gateway can run several of their agents at once — each in its own isolated workspace (keyed by an external agent id). Those agents are bound to that provider's gateway. There is no pooling across other people's gateways, no failover. They share the gateway's fate: if it goes down, every agent on it goes offline together.
 
 Why bound and not poolable: BYORT makes pooling near-impossible. An agent running on provider A's gateway consumes A's tokens; you cannot migrate a live session to provider B mid-conversation without changing who pays and losing context/memory. Binding is also what keeps us ToS-safe — we sell the agent's *work*, not raw transferable compute.
 
-Consequence: a provider is **not** "someone with idle compute." A provider is "someone who builds and hosts one agent." They contribute both. Barrier is kept low via templates (fork a ready-made agent, tweak persona/skills, publish) rather than building from scratch.
+Consequence: a provider is **not** "someone with idle compute." A provider is "someone who builds and hosts their own agents" — one gateway, one or more agents running on it. They contribute both. Barrier is kept low via templates (fork a ready-made agent, tweak persona/skills, publish) rather than building from scratch.
 
-MVP behavior on failure: gateway down → agent shows **offline** in the catalog, cannot be started. Dies mid-session → session drops, unused credit is refunded. Uptime feeds reputation, so flaky providers rank lower. Failover / adapter migration is explicitly an **upgrade for later**, out of scope for v1 (see §11).
+MVP behavior on failure: gateway down → its agents show **offline** in the catalog, cannot be started. Dies mid-session → session drops, unused credit is refunded. Uptime feeds reputation, so flaky providers rank lower. Failover / adapter migration is explicitly an **upgrade for later**, out of scope for v1 (see §11).
 
 ## 3. Actors
 
 - **Provider** *(MVP)* — a user who connects an idle gateway and publishes an agent to the public catalog. Earns from usage.
 - **Consumer (human)** *(MVP)* — a user who browses the catalog and uses an agent via the UI. Pays in USDC via a credit balance.
 - **Consumer (machine/dev)** *(later)* — a bot or app that calls a published agent programmatically via API. Pays per request via x402. Deferred: demand is thin and it adds integration surface.
-- **Protocol** *(later)* — OCCA. Takes a fee, runs settlement, runs buyback-burn, distributes staking rewards.
+- **Protocol** *(later)* — OCCA. Takes a fee, runs settlement, runs buyback-burn, distributes holder rewards.
 
 ### 3.1 MVP scope (LOCKED)
 
@@ -57,7 +57,7 @@ MVP has **two players only: provider and human consumer.** The single goal is to
 Deferred to post-MVP (do not build at the start):
 
 - Machine/dev consumer and the x402 rail.
-- Protocol fee, buyback-burn, staking rewards — all the OCCA token mechanics from §7.
+- Protocol fee, buyback-burn, hold-to-access tiers — all the $OCCA token mechanics (see §7 → agent-marketplace-token.md).
 
 Honest flag: deferring the fee + burn means **OCCA does nothing in MVP** — it is functionally a USDC agent marketplace until token mechanics land. That is an acceptable first step, but the token must enter in the very next iteration, or there is no OCCA story. Prove users first, layer the token second.
 
@@ -77,7 +77,7 @@ New to build:
 - x402 payment rail for programmatic consumption.
 - Fee split + settlement to providers.
 - Leaderboards (top agents, top providers, total volume).
-- Token mechanics: stake-to-list, stake-for-fee-share, buyback-burn.
+- Token mechanics: hold-to-access tiers, fee → buyback-burn + holder reward (see agent-marketplace-token.md).
 
 ## 5. The economic loop
 
@@ -94,14 +94,14 @@ Consumer browses, picks agent  ◀────────┘
         ├─ Provider take      (PROPOSED 90%)
         └─ Protocol fee       (PROPOSED 10%)
                   ├─ buyback-burn OCCA   (PROPOSED 60% of fee)
-                  └─ OCCA staker rewards (PROPOSED 40% of fee)
+                  └─ OCCA holder rewards (PROPOSED 40% of fee)
         │
         ▼
    Provider settled on-chain periodically (reuse daily anchor + disbursement).
    Leaderboards update. Volume is public and on-chain.
 ```
 
-The narrative: people use bots and pay stable USDC; the fees recycle into buyback-burn and staker rewards; OCCA appreciates because it absorbs marketplace activity, not because anyone is forced to pay with it.
+The narrative: people use bots and pay stable USDC; the fees recycle into buyback-burn and holder rewards; OCCA appreciates because it absorbs marketplace activity, not because anyone is forced to pay with it.
 
 ### 5.1 MVP loop (LOCKED)
 
@@ -120,10 +120,10 @@ Provider hosts agent  ──▶  Consumer deposits USDC once → credit balance
                                         │
                                         ▼
                           Provider settled on-chain periodically.
-                          Fee accrues to treasury; burn/staking wired later.
+                          Fee accrues to treasury; burn/holder-reward wired later.
 ```
 
-Why a fee from day one even though burn is off: it is much easier to set a fee on day one than to raise it from 0% later (people resent a previously-free thing suddenly being charged). The 0.5% collected just pools in the treasury until the burn/staking mechanics are ready, then gets routed in.
+Why a fee from day one even though burn is off: it is much easier to set a fee on day one than to raise it from 0% later (people resent a previously-free thing suddenly being charged). The 0.5% collected just pools in the treasury until the burn/holder-reward mechanics are ready, then gets routed in.
 
 ## 6. Payment architecture — LOCKED
 
@@ -148,14 +148,13 @@ Abuse guard (required, not optional): free credit gets farmed via sybil (many ac
 
 ## 7. OCCA token role — LOCKED
 
-OCCA is the **value-capture layer**, never the payment unit. Three utilities plus a sink:
+$OCCA is the **value-capture layer, never the payment unit**. Agents are paid for in USDC; $OCCA is **hold-to-access** — the more you hold, the better your tier (free budget, fee discount, access). It is **not** a staking token.
 
-- **Gate.** Hold OCCA to unlock features, higher earning tier, or access to premium agents.
-- **Reward.** Stake OCCA to earn a share of protocol fees.
-- **Upgrade.** Stake OCCA to list an agent, boost ranking, or raise limits. Also acts as a spam filter.
-- **Buyback-burn.** A portion of every fee buys OCCA on the market and burns it, so marketplace activity flows into price and supply.
+Full utility, the tier table, and value accrual (fee → buyback → burn + holder reward) live in their own doc — the single source of truth for the token:
 
-Net: users who only want to use bots never touch OCCA. Users who want upside hold/stake it. Both feed the same volume.
+**→ [agent-marketplace-token.md](agent-marketplace-token.md)**
+
+This blueprint stays on the marketplace and does not restate the token mechanics.
 
 ## 8. Go-to-market mechanics
 
@@ -170,7 +169,7 @@ These exist to manufacture the visible economy before organic demand arrives.
 
 - **ToS safety.** Sell agent work/output, not raw model access. Reselling raw Claude/OpenAI subscription capacity likely violates provider ToS and is a time bomb. The product framing must stay on "configured agent that produces something," never "cheap inference."
 - **Reputation.** Use trace anchor / provenance so consumers can judge an agent before paying. Gate low-reputation providers.
-- **Wash trading.** Crypto users will wash to farm rewards and climb leaderboards. Stake-to-list raises the cost; fee design must not make self-dealing profitable (a provider paying themselves should net-lose on fees). Needs explicit modeling before any reward goes live.
+- **Wash trading.** Crypto users will wash to farm rewards and climb leaderboards. A hold-to-list / listing cost raises the barrier; fee design must not make self-dealing profitable (a provider paying themselves should net-lose on fees). Needs explicit modeling before any reward goes live.
 - **Quality / refunds.** Consumer-grade expectations (bad output, refunds) are new territory the company product never faced. See refund stance below.
 
 ### 9.1 MVP refund stance (LOCKED)
@@ -183,10 +182,10 @@ These two work *because of* the free welcome credit (§6.1): a user tries an age
 ## 10. Open decisions
 
 1. **Pricing model.** DEFERRED — discuss later. Three candidates: **pay-per-message**, **pay-per-token**, **pay-per-task**. Not blocking MVP framing; the credit-debit mechanic is the same regardless of which metering unit wins.
-2. **Fee split.** PROPOSED: **90% provider / 10% protocol**, and of that fee **60% buyback-burn / 40% staker rewards** (burn-heavy early for the deflation narrative, shift toward stakers as staking grows). Confirm or adjust.
+2. **Fee split.** PROPOSED: **90% provider / 10% protocol**, and of that fee **60% buyback-burn / 40% holder rewards** (burn-heavy early for the deflation narrative) — locked in agent-marketplace-token.md, treat that as authoritative. Confirm or adjust.
 3. **Seed vs open.** LOCKED: **seed a few agents first**, then open public publishing.
 4. **Name.** LOCKED: **OCCA Open Market**, deployed at `market.occaai.com`.
-5. **Anti-wash model.** Open. Must be modeled before staking rewards go live.
+5. **Anti-wash model.** Open. Must be modeled before holder rewards go live.
 
 ## 11. Out of scope for v1
 
@@ -220,7 +219,7 @@ Roadmap continuity: OCCA Open Market is a **separate, new concept** from the exi
 From earlier scratch notes (since deleted), these belong to this blueprint:
 
 - Public agent that visitors can chat with and give tasks to; agent economy as a first-class OS surface.
-- Per-agent gateway, per-agent adapter, per-agent wallet.
+- Per-provider gateway (can host several of that provider's agents), per-agent adapter config, per-agent wallet.
 - Agent reputation / track record on-chain.
 - BYORT as the provider-side primitive.
 - Direct report to owner via Telegram or other channel.
