@@ -105,7 +105,7 @@ Page background: `--color-bg` with a very faint radial lighter patch behind the 
 
 **Button.** Use the [`Button`](src/components/ui/button.tsx) component — don't hand-roll. `rounded-md`, `font-medium`, sizes `sm | md | lg`. Variants:
 - **default** (the standard action, analysed from Clerk's dark button): dark gray `#42434d` with a top gradient sheen, a 0.5px white ring, an inset top highlight, and a soft drop shadow. `text-fg`. Lightens slightly on hover. This is the default CTA.
-- **secondary** — ghost: transparent, `border-line-strong`, `text-fg`, hover raises border + `bg-surface-2`.
+- **secondary** — quiet but clearly a button: `bg-surface-2` fill, `border-line-strong`, a faint inset top highlight + soft shadow, `text-fg`; hover raises the border and lifts brightness. Less prominent than default, never transparent.
 - **light** — soft off-white (`#e4e4e7`) fill, `text-bg`. High-emphasis alternative; use sparingly.
 
 `withArrow` adds the looping chevron (one slides out right, a fresh one slides in from the left) on hover — nice on the lead CTA. Pass `href` to render an `<a>`. Never cyan, never a second accent.
