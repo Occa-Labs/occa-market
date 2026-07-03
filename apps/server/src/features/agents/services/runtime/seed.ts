@@ -12,11 +12,18 @@
   Skills are labels here (names), not multi-file Claude Code skills. When we
   need real auto-invoked skills, each would become its own .claude/skills/<name>/
   SKILL.md — which also requires relaxing the gateway's flat-file guard.
+
+  Tools are provider-brought MCP servers: their configs compile into a single
+  .mcp.json at the workspace root (flat — passes the gateway's filename guard).
+  NOTE for the run wiring: headless `claude -p` does not auto-trust project
+  .mcp.json servers; the run path must pass --mcp-config (or pre-approve the
+  project) and allow the mcp__<name>__* tools via allowedTools.
 */
 
 import type {
   AgentDetail,
   AgentSkillInput,
+  AgentToolInput,
   MarketAgent,
 } from "@occa-market/shared";
 import { systemPrompt } from "./prompts";
@@ -49,11 +56,33 @@ export function buildClaudeMd(
   return lines.join("\n");
 }
 
+/**
+ * Compile the brought tools into standard MCP JSON ({ mcpServers: { name: … } }).
+ * Entries without a config are display-only labels (e.g. template forks) and
+ * are skipped — an empty server entry would just fail to connect at runtime.
+ * Returns null when nothing is seedable, so callers can omit the file.
+ */
+export function buildMcpJson(tools: AgentToolInput[]): string | null {
+  const withConfig = tools.filter(
+    (t) => t.name && Object.keys(t.config).length > 0,
+  );
+  if (withConfig.length === 0) return null;
+  const mcpServers: Record<string, unknown> = {};
+  for (const t of withConfig) mcpServers[t.name] = t.config;
+  return `${JSON.stringify({ mcpServers }, null, 2)}\n`;
+}
+
 /** The flat file list shipped to POST /v1/seed. */
 export function buildSeedFiles(
   agent: MarketAgent,
   detail: AgentDetail,
   skills: AgentSkillInput[] = [],
+  tools: AgentToolInput[] = [],
 ): SeedFile[] {
-  return [{ filename: "CLAUDE.md", content: buildClaudeMd(agent, detail, skills) }];
+  const files: SeedFile[] = [
+    { filename: "CLAUDE.md", content: buildClaudeMd(agent, detail, skills) },
+  ];
+  const mcp = buildMcpJson(tools);
+  if (mcp) files.push({ filename: ".mcp.json", content: mcp });
+  return files;
 }

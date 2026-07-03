@@ -4,11 +4,15 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Select } from "@base-ui/react/select";
 import {
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
+  ArrowUp,
   Check,
   ChevronDown,
+  GitBranch,
   Loader2,
+  Pencil,
   Plus,
   RefreshCw,
   X,
@@ -20,18 +24,21 @@ import {
 } from "@occa-market/shared";
 import { createAgent, getAgentDetail, importSkill } from "@/lib/api";
 import {
+  describeTool,
   draftFromTemplate,
   draftToPreview,
   emptyDraft,
   handleFromName,
+  isDraftStep,
+  isDraftTool,
   makeExternalId,
   parseSkillMarkdown,
+  parseToolConfig,
   type DraftAgent,
 } from "@/lib/builder";
 import {
   ADAPTERS,
   ICON_GLYPHS,
-  TOOL_LIBRARY,
   type AdapterType,
   type DraftSkill,
 } from "@/lib/builder-options";
@@ -79,6 +86,13 @@ export function AgentBuilder({ templates }: { templates: MarketAgent[] }) {
           setDraft({
             ...emptyDraft(),
             ...saved.draft,
+            // pre-rework drafts stored tools/steps as plain strings — drop those
+            tools: Array.isArray(saved.draft.tools)
+              ? saved.draft.tools.filter(isDraftTool)
+              : [],
+            workflow: Array.isArray(saved.draft.workflow)
+              ? saved.draft.workflow.filter(isDraftStep)
+              : [],
             // never restore a secret or a stale "connected" status
             apiKey: "",
             connection: "idle",
@@ -167,7 +181,9 @@ export function AgentBuilder({ templates }: { templates: MarketAgent[] }) {
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[200px_1fr]">
         <Stepper current={step} onJump={setStep} />
 
-        <div>
+        {/* min-w-0 lets the 1fr column shrink so long skill text truncates
+            instead of forcing the whole layout wider. */}
+        <div className="min-w-0">
           <div className="min-h-[360px]">
             {step === 0 && (
               <StartStep
@@ -265,7 +281,7 @@ function Stepper({
               type="button"
               onClick={() => onJump(i)}
               className={`flex h-full w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors ${
-                active ? "lg:bg-surface-2" : "hover:bg-surface-2/60"
+                active ? "" : "hover:bg-surface-2/60"
               }`}
             >
               {/* z-10 + solid fill so the node masks the connector passing behind it */}
@@ -776,19 +792,31 @@ function SkillsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
 
       {/* add a skill — write it or import from a repo */}
       <div className="mt-5 rounded-xl border border-line bg-surface-2 p-3.5">
-        <div className="mb-3 inline-flex rounded-lg border border-line p-0.5">
-          {(["write", "repo"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              className={`rounded-md px-3 py-1 font-mono text-xs transition-colors ${
-                mode === m ? "bg-surface-2 text-fg" : "text-muted hover:text-fg"
-              }`}
-            >
-              {m === "write" ? "Write" : "Import from repo"}
-            </button>
-          ))}
+        <div className="mb-4 inline-flex rounded-lg border border-line bg-bg p-1">
+          {(
+            [
+              { m: "write", label: "Write", Icon: Pencil },
+              { m: "repo", label: "Import from repo", Icon: GitBranch },
+            ] as const
+          ).map(({ m, label, Icon }) => {
+            const on = mode === m;
+            return (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                aria-pressed={on}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 font-mono text-xs transition-all ${
+                  on
+                    ? "bg-surface-2 text-fg shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_1px_2px_rgba(0,0,0,0.4)]"
+                    : "text-muted hover:text-fg"
+                }`}
+              >
+                <Icon size={13} className={on ? "text-fg" : "text-faint"} />
+                {label}
+              </button>
+            );
+          })}
         </div>
 
         {mode === "write" ? (
@@ -867,37 +895,102 @@ function SkillsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
 /* ── Step 5 · Tools ───────────────────────────────────────────── */
 
 function ToolsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
-  function toggle(tool: string) {
-    update({
-      tools: draft.tools.includes(tool)
-        ? draft.tools.filter((t) => t !== tool)
-        : [...draft.tools, tool],
-    });
+  const [name, setName] = useState("");
+  const [config, setConfig] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  function add() {
+    const parsed = parseToolConfig(config, name);
+    if (!parsed.ok) {
+      setError(parsed.error);
+      return;
+    }
+    const fresh = parsed.tools.filter(
+      (t) => !draft.tools.some((x) => x.name === t.name),
+    );
+    if (fresh.length === 0) {
+      setError("Already added.");
+      return;
+    }
+    update({ tools: [...draft.tools, ...fresh] });
+    setName("");
+    setConfig("");
+    setError(null);
   }
 
   return (
     <StepShell
       title="Tools"
-      hint="Integrations the agent can call to do its work."
+      hint="Integrations the agent can call. You bring each one as an MCP server — paste its JSON config and it gets seeded to your gateway workspace as .mcp.json."
     >
-      <div className="flex flex-wrap gap-2">
-        {TOOL_LIBRARY.map((tool) => {
-          const on = draft.tools.includes(tool);
-          return (
+      {/* added tools */}
+      <div className="flex flex-col gap-2">
+        {draft.tools.length === 0 && (
+          <p className="font-mono text-xs text-faint">No tools yet.</p>
+        )}
+        {draft.tools.map((t) => (
+          <div
+            key={t.name}
+            className="flex items-start justify-between gap-3 rounded-xl border border-line bg-surface-2 px-3.5 py-2.5"
+          >
+            <div className="min-w-0">
+              <p className="font-mono text-sm text-fg">{t.name}</p>
+              <p className="mt-0.5 truncate font-mono text-xs text-muted">
+                {describeTool(t.config)}
+              </p>
+            </div>
             <button
-              key={tool}
               type="button"
-              onClick={() => toggle(tool)}
-              className={`rounded-xl border px-3 py-1.5 font-mono text-xs transition-colors ${
-                on
-                  ? "border-fg/25 bg-surface-2 text-fg"
-                  : "border-line text-muted hover:border-line-strong hover:text-fg"
-              }`}
+              aria-label={`Remove ${t.name}`}
+              onClick={() =>
+                update({ tools: draft.tools.filter((x) => x.name !== t.name) })
+              }
+              className="mt-0.5 flex-none text-faint transition-colors hover:text-fg"
             >
-              {tool}
+              <X size={13} />
             </button>
-          );
-        })}
+          </div>
+        ))}
+      </div>
+
+      {/* add a tool — paste its MCP server config */}
+      <div className="mt-5 rounded-xl border border-line bg-surface-2 p-3.5">
+        <TextInput
+          value={name}
+          placeholder="Tool name (optional — read from the config keys if present)"
+          onChange={(e) => {
+            setName(e.target.value);
+            setError(null);
+          }}
+        />
+        <TextArea
+          value={config}
+          rows={8}
+          placeholder={
+            'Paste the MCP server config from its README…\n\n{\n  "mcpServers": {\n    "dexscreener": {\n      "command": "npx",\n      "args": ["-y", "dexscreener-mcp"]\n    }\n  }\n}'
+          }
+          className="mt-2"
+          onChange={(e) => {
+            setConfig(e.target.value);
+            setError(null);
+          }}
+        />
+        <p className="mt-1.5 font-mono text-[0.7rem] leading-relaxed text-faint">
+          Runs on your gateway host, so anything it needs (binaries, env keys)
+          lives there. Configs are internal — never shown in the catalog.
+        </p>
+        {error && <p className="mt-2 font-mono text-xs text-bad">{error}</p>}
+        <div className="mt-2 flex justify-end">
+          <Button
+            variant="secondary"
+            size="md"
+            disabled={!config.trim()}
+            onClick={add}
+          >
+            <Plus size={14} className="mr-1.5" />
+            Add tool
+          </Button>
+        </div>
       </div>
     </StepShell>
   );
@@ -906,19 +999,70 @@ function ToolsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
 /* ── Step 6 · Workflow ────────────────────────────────────────── */
 
 function WorkflowStep({ draft, update }: { draft: DraftAgent; update: Update }) {
-  const [step, setStep] = useState("");
+  const [text, setText] = useState("");
+  const [uses, setUses] = useState<string[]>([]);
+  // Index of the step loaded into the form for editing; null = adding new.
+  const [editing, setEditing] = useState<number | null>(null);
 
-  function add() {
-    const s = step.trim();
-    if (!s) return;
-    update({ workflow: [...draft.workflow, s] });
-    setStep("");
+  // Capability names a step can tag — the skills + tools already in the draft.
+  const capabilities = [
+    ...draft.skills.map((s) => s.name),
+    ...draft.tools.map((t) => t.name),
+  ];
+
+  function toggleUse(name: string) {
+    setUses((u) =>
+      u.includes(name) ? u.filter((x) => x !== name) : [...u, name],
+    );
+  }
+
+  function resetForm() {
+    setText("");
+    setUses([]);
+    setEditing(null);
+  }
+
+  function save() {
+    const t = text.trim();
+    if (!t) return;
+    // Keep only tags that still exist — a skill/tool may have been removed.
+    const step = { text: t, uses: uses.filter((u) => capabilities.includes(u)) };
+    update({
+      workflow:
+        editing !== null
+          ? draft.workflow.map((s, i) => (i === editing ? step : s))
+          : [...draft.workflow, step],
+    });
+    resetForm();
+  }
+
+  function edit(i: number) {
+    setEditing(i);
+    setText(draft.workflow[i].text);
+    setUses(draft.workflow[i].uses);
+  }
+
+  function remove(i: number) {
+    update({ workflow: draft.workflow.filter((_, j) => j !== i) });
+    if (editing === i) resetForm();
+    else if (editing !== null && i < editing) setEditing(editing - 1);
+  }
+
+  function move(i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= draft.workflow.length) return;
+    const next = [...draft.workflow];
+    [next[i], next[j]] = [next[j], next[i]];
+    update({ workflow: next });
+    // keep the editing pointer on the step it was on
+    if (editing === i) setEditing(j);
+    else if (editing === j) setEditing(i);
   }
 
   return (
     <StepShell
       title="Workflow"
-      hint="The ordered steps the agent runs on each request."
+      hint="How it works — the playbook the agent follows for its core job. Each step can tag the skill or tool it draws on; buyers see this as the agent's timeline."
     >
       <ol className="flex flex-col">
         {draft.workflow.length === 0 && (
@@ -926,6 +1070,7 @@ function WorkflowStep({ draft, update }: { draft: DraftAgent; update: Update }) 
         )}
         {draft.workflow.map((s, i) => {
           const lastStep = i === draft.workflow.length - 1;
+          const validUses = s.uses.filter((u) => capabilities.includes(u));
           return (
             <li key={i} className="flex gap-3">
               <div className="flex flex-none flex-col items-center">
@@ -934,42 +1079,129 @@ function WorkflowStep({ draft, update }: { draft: DraftAgent; update: Update }) 
                 </span>
                 {!lastStep && <span className="my-1 w-px flex-1 bg-line" />}
               </div>
-              <div className="flex flex-1 items-start justify-between gap-2 pb-4 pt-1.5">
-                <p className="font-mono text-sm leading-relaxed text-muted">
-                  {s}
-                </p>
-                <button
-                  type="button"
-                  onClick={() =>
-                    update({
-                      workflow: draft.workflow.filter((_, j) => j !== i),
-                    })
-                  }
-                  className="mt-0.5 flex-none text-faint transition-colors hover:text-fg"
-                >
-                  <X size={12} />
-                </button>
+              <div
+                className={`mb-3 flex min-w-0 flex-1 items-start justify-between gap-2 rounded-xl px-3 py-2 transition-colors ${
+                  editing === i ? "border border-line-strong bg-surface-2" : ""
+                }`}
+              >
+                <div className="min-w-0">
+                  <p className="font-mono text-sm leading-relaxed text-muted">
+                    {s.text}
+                  </p>
+                  {validUses.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {validUses.map((u) => (
+                        <span
+                          key={u}
+                          className="rounded-full border border-line bg-surface-2 px-2 py-0.5 font-mono text-[0.65rem] text-faint"
+                        >
+                          {u}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-none items-center gap-1 pt-0.5">
+                  <button
+                    type="button"
+                    aria-label="Move step up"
+                    disabled={i === 0}
+                    onClick={() => move(i, -1)}
+                    className="text-faint transition-colors hover:text-fg disabled:opacity-30 disabled:hover:text-faint"
+                  >
+                    <ArrowUp size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Move step down"
+                    disabled={lastStep}
+                    onClick={() => move(i, 1)}
+                    className="text-faint transition-colors hover:text-fg disabled:opacity-30 disabled:hover:text-faint"
+                  >
+                    <ArrowDown size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Edit step ${i + 1}`}
+                    onClick={() => edit(i)}
+                    className="text-faint transition-colors hover:text-fg"
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Remove step ${i + 1}`}
+                    onClick={() => remove(i)}
+                    className="text-faint transition-colors hover:text-fg"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
               </div>
             </li>
           );
         })}
       </ol>
 
-      <div className="mt-3 flex gap-2">
+      {/* add / edit a step */}
+      <div className="mt-3 rounded-xl border border-line bg-surface-2 p-3.5">
         <TextInput
-          value={step}
-          placeholder="Add a step…"
-          onChange={(e) => setStep(e.target.value)}
+          value={text}
+          placeholder={editing !== null ? "Edit the step…" : "Add a step…"}
+          onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              add();
+              save();
             }
           }}
         />
-        <Button variant="secondary" size="md" onClick={add}>
-          <Plus size={14} />
-        </Button>
+        <p className="mt-3 font-mono text-[0.7rem] uppercase tracking-[0.18em] text-faint">
+          Uses
+        </p>
+        {capabilities.length === 0 ? (
+          <p className="mt-1.5 font-mono text-xs text-faint">
+            Add skills or tools first to tag what a step draws on.
+          </p>
+        ) : (
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {capabilities.map((name) => {
+              const on = uses.includes(name);
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => toggleUse(name)}
+                  aria-pressed={on}
+                  className={`rounded-full border px-2.5 py-1 font-mono text-xs transition-colors ${
+                    on
+                      ? "border-fg/25 bg-bg text-fg"
+                      : "border-line text-muted hover:border-line-strong hover:text-fg"
+                  }`}
+                >
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className="mt-3 flex justify-end gap-2">
+          {editing !== null && (
+            <Button variant="secondary" size="md" onClick={resetForm}>
+              Cancel
+            </Button>
+          )}
+          <Button variant="secondary" size="md" disabled={!text.trim()} onClick={save}>
+            {editing !== null ? (
+              "Save step"
+            ) : (
+              <>
+                <Plus size={14} className="mr-1.5" />
+                Add step
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     </StepShell>
   );

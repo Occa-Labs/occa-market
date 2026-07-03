@@ -1,7 +1,8 @@
 /*
   Provider-side option libraries for the build wizard — the static catalogs the
-  form pulls from (adapters, tools, skills). Data, not config: these are the
-  choices a provider picks between, surfaced in the UI.
+  form pulls from (adapters, icons). Data, not config: these are the choices a
+  provider picks between, surfaced in the UI. Skills and tools are NOT catalogs
+  — the provider brings both (skill markdown, MCP server configs).
 */
 
 export type AdapterType = "claude-code" | "openclaw" | "codex" | "hermes";
@@ -47,19 +48,6 @@ export const ADAPTERS: AdapterInfo[] = [
   },
 ];
 
-export const TOOL_LIBRARY = [
-  "Price feed",
-  "OHLCV history",
-  "DEX pair feed",
-  "On-chain RPC",
-  "Block explorer",
-  "Token sniffer",
-  "Web search",
-  "Trend feed",
-  "Draft store",
-  "Indicator engine",
-];
-
 /*
   Icon palette for an agent's mark. These are monochrome geometric glyphs (not
   emoji) so they sit right in the dark, grayscale UI. Stored as a string on the
@@ -86,4 +74,25 @@ export type DraftSkill = {
   source: SkillSource;
   repoUrl?: string;
   repoPath?: string;
+};
+
+/*
+  A tool the provider brings: one MCP server, exactly as its README ships it.
+  `config` is the entry under `mcpServers.<name>` (command/args/env for stdio,
+  type/url/headers for remote). Internal — seeded to the provider's gateway
+  workspace as .mcp.json, never shown in the catalog beyond the name.
+*/
+export type DraftTool = {
+  name: string;
+  config: Record<string, unknown>;
+};
+
+/*
+  One step of the agent's playbook. `uses` optionally tags skills/tools already
+  in the draft (by name) — shown as pills on the public timeline and rendered
+  as "(use X)" hints in the seeded prompt. Declarative, not an engine.
+*/
+export type DraftStep = {
+  text: string;
+  uses: string[];
 };

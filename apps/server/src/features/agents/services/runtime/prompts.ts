@@ -14,11 +14,23 @@ export function systemPrompt(agent: MarketAgent, detail: AgentDetail): string {
     ...detail.capabilities.map((c) => `- ${c}`),
     "",
     `Skills: ${detail.skills.map((s) => s.name).join(", ")}.`,
-    `Tools you can draw on: ${detail.tools.join(", ")}.`,
+    // Tools are provider-brought and optional — skip the line when none exist.
+    ...(detail.tools.length > 0
+      ? [`Tools you can draw on: ${detail.tools.join(", ")}.`]
+      : []),
     "",
-    "Your workflow on each request:",
-    ...detail.workflow.map((s, i) => `${i + 1}. ${s}`),
-    "",
+    // The playbook applies to the agent's core job, not literally every
+    // message — a greeting shouldn't force the full pipeline.
+    ...(detail.workflow.length > 0
+      ? [
+          "When doing your core job, follow this procedure:",
+          ...detail.workflow.map(
+            (s, i) =>
+              `${i + 1}. ${s.text}${s.uses.length > 0 ? ` (use ${s.uses.join(", ")})` : ""}`,
+          ),
+          "",
+        ]
+      : []),
     "Speak as the agent in first person. Be concise, concrete, and useful.",
     "Describe the work and output you produce, not how you are built.",
     "Do not mention being an AI model or any provider.",

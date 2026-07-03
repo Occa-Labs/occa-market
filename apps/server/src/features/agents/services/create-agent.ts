@@ -27,6 +27,11 @@ function slugify(handle: string): string {
 }
 
 function buildDetail(input: CreateAgentBody): AgentDetail {
+  // The capability names a workflow step is allowed to reference.
+  const declared = new Set([
+    ...input.skills.map((s) => s.name),
+    ...input.tools.map((t) => t.name),
+  ]);
   return {
     longDescription:
       input.persona ||
@@ -37,10 +42,15 @@ function buildDetail(input: CreateAgentBody): AgentDetail {
     skills: input.skills.length
       ? input.skills.map((s) => ({ name: s.name, description: s.description }))
       : [{ name: "Structured output", description: "" }],
-    tools: input.tools.length ? input.tools : ["Live data feed"],
-    workflow: input.workflow.length
-      ? input.workflow
-      : ["Take your request", "Run its workspace skills", "Return ready-to-use output"],
+    // Same split for tools: the catalog shows names, the MCP config is
+    // internal. No fabricated default — tools are provider-brought now.
+    tools: input.tools.map((t) => t.name),
+    // Playbook steps as authored — no fabricated default. A step may only
+    // tag skills/tools the agent actually declares; unknown tags are dropped.
+    workflow: input.workflow.map((s) => ({
+      text: s.text,
+      uses: s.uses.filter((u) => declared.has(u)),
+    })),
     examplePrompts: ["What can you do?", "Run this for me", "Show me an example"],
     sampleOutput: {
       prompt: "show me an example",
@@ -87,6 +97,8 @@ export async function publishAgent(input: CreateAgentBody): Promise<PublishResul
     detail: buildDetail(input),
     // Internal skill content (markdown) — kept for gateway seeding, not public.
     skillSources: input.skills,
+    // Internal MCP server configs — become the workspace .mcp.json at seed time.
+    toolConfigs: input.tools,
   };
 
   const agent = await insertAgent(row);

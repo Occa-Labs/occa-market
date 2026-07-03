@@ -127,6 +127,11 @@ export function AgentDetail({
             <div>
               <p className="eyebrow mb-3">Tools</p>
               <div className="flex flex-wrap gap-2">
+                {detail.tools.length === 0 && (
+                  <span className="font-mono text-xs text-faint">
+                    None declared.
+                  </span>
+                )}
                 {detail.tools.map((tool) => (
                   <span
                     key={tool}
@@ -141,7 +146,10 @@ export function AgentDetail({
           </section>
 
           <section>
-            <p className="eyebrow mb-3">Workflow</p>
+            <p className="eyebrow mb-3">How it works</p>
+            {detail.workflow.length === 0 && (
+              <p className="font-mono text-xs text-faint">None declared.</p>
+            )}
             <ol className="flex flex-col">
               {detail.workflow.map((step, i) => {
                 const last = i === detail.workflow.length - 1;
@@ -153,13 +161,25 @@ export function AgentDetail({
                       </span>
                       {!last && <span className="my-1 w-px flex-1 bg-line" />}
                     </div>
-                    <p
-                      className={`font-mono text-sm leading-relaxed text-muted ${
-                        last ? "pb-0" : "pb-5"
-                      } pt-1.5`}
-                    >
-                      {step}
-                    </p>
+                    <div className={`min-w-0 pt-1.5 ${last ? "pb-0" : "pb-5"}`}>
+                      <p className="font-mono text-sm leading-relaxed text-muted">
+                        {step.text}
+                      </p>
+                      {/* the capabilities this step draws on — ties the
+                          timeline to the Skills / Tools sections above */}
+                      {step.uses.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {step.uses.map((u) => (
+                            <span
+                              key={u}
+                              className="rounded-full border border-line bg-surface-2 px-2 py-0.5 font-mono text-[0.65rem] text-faint"
+                            >
+                              {u}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </li>
                 );
               })}

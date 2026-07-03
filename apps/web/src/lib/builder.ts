@@ -13,7 +13,13 @@
 */
 
 import type { AgentCategory, AgentDetail, MarketAgent } from "@occa-market/shared";
-import { ADAPTERS, type AdapterType, type DraftSkill } from "./builder-options";
+import {
+  ADAPTERS,
+  type AdapterType,
+  type DraftSkill,
+  type DraftStep,
+  type DraftTool,
+} from "./builder-options";
 
 export type ConnectionStatus = "idle" | "testing" | "ok" | "fail";
 
@@ -36,8 +42,8 @@ export type DraftAgent = {
   connection: ConnectionStatus;
   // workspace
   skills: DraftSkill[];
-  tools: string[];
-  workflow: string[];
+  tools: DraftTool[];
+  workflow: DraftStep[];
 };
 
 export function emptyDraft(): DraftAgent {
@@ -83,8 +89,12 @@ export function draftFromTemplate(
       markdown: "",
       source: "markdown" as const,
     })),
-    tools: detail.tools,
-    workflow: detail.workflow,
+    // The template only exposes public tool names — carried over as labels
+    // with no config. Seeding skips configless entries; the provider replaces
+    // them with their own MCP servers.
+    tools: detail.tools.map((name) => ({ name, config: {} })),
+    // Fresh copies, so editing the fork never mutates the template's detail.
+    workflow: detail.workflow.map((s) => ({ text: s.text, uses: [...s.uses] })),
   };
 }
 
@@ -132,6 +142,115 @@ export function parseSkillMarkdown(md: string): {
     name: name ? unquote(name[1]) : "",
     description: description ? unquote(description[1]) : "",
   };
+}
+
+/*
+  Parse a pasted MCP server config into named tool entries. Liberal in what it
+  accepts — the three shapes MCP READMEs ship:
+    1. a full config:   {"mcpServers": {"name": {…}}}   (may hold several)
+    2. a named entry:   {"name": {"command": …}}
+    3. a bare entry:    {"command": …} or {"url": …}    (needs the name field)
+*/
+export type ParsedToolConfig =
+  | { ok: true; tools: DraftTool[] }
+  | { ok: false; error: string };
+
+function isServerEntry(v: unknown): v is Record<string, unknown> {
+  return (
+    !!v &&
+    typeof v === "object" &&
+    !Array.isArray(v) &&
+    ("command" in v || "url" in v)
+  );
+}
+
+export function parseToolConfig(
+  raw: string,
+  explicitName: string,
+): ParsedToolConfig {
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    return { ok: false, error: "Not valid JSON." };
+  }
+  if (!json || typeof json !== "object" || Array.isArray(json)) {
+    return { ok: false, error: "Expected a JSON object." };
+  }
+  const obj = json as Record<string, unknown>;
+
+  // Unwrap a full {"mcpServers": {…}} document down to its server map.
+  const wrapped = obj.mcpServers;
+  const bag =
+    wrapped && typeof wrapped === "object" && !Array.isArray(wrapped)
+      ? (wrapped as Record<string, unknown>)
+      : obj;
+
+  // A bare entry — the pasted object IS the server config, so a name is needed.
+  if (isServerEntry(bag)) {
+    const name = explicitName.trim();
+    if (!name) {
+      return { ok: false, error: "Give the tool a name — the pasted config has none." };
+    }
+    return { ok: true, tools: [{ name, config: bag }] };
+  }
+
+  // A named map: one or more { name: entry } pairs.
+  const entries = Object.entries(bag).filter(
+    (e): e is [string, Record<string, unknown>] => isServerEntry(e[1]),
+  );
+  if (entries.length === 0) {
+    return {
+      ok: false,
+      error: "No MCP server found — expected a `command` or `url` key.",
+    };
+  }
+  const override = explicitName.trim();
+  return {
+    ok: true,
+    tools: entries.map(([key, config]) => ({
+      // An explicit name renames a single pasted entry; a multi-entry paste
+      // keeps its own keys.
+      name: entries.length === 1 && override ? override : key,
+      config,
+    })),
+  };
+}
+
+/** One-line summary of an MCP server entry, for list rows. */
+export function describeTool(config: Record<string, unknown>): string {
+  if (typeof config.command === "string") {
+    const args = Array.isArray(config.args) ? ` ${config.args.join(" ")}` : "";
+    return `stdio · ${config.command}${args}`;
+  }
+  if (typeof config.url === "string") {
+    const kind = typeof config.type === "string" ? config.type : "http";
+    return `${kind} · ${config.url}`;
+  }
+  return "no config — display label only";
+}
+
+/** Guard for restored drafts — pre-rework drafts stored steps as strings. */
+export function isDraftStep(v: unknown): v is DraftStep {
+  if (!v || typeof v !== "object") return false;
+  const s = v as { text?: unknown; uses?: unknown };
+  return (
+    typeof s.text === "string" &&
+    Array.isArray(s.uses) &&
+    s.uses.every((u) => typeof u === "string")
+  );
+}
+
+/** Guard for restored drafts — pre-rework drafts stored tools as strings. */
+export function isDraftTool(v: unknown): v is DraftTool {
+  if (!v || typeof v !== "object") return false;
+  const t = v as { name?: unknown; config?: unknown };
+  return (
+    typeof t.name === "string" &&
+    !!t.config &&
+    typeof t.config === "object" &&
+    !Array.isArray(t.config)
+  );
 }
 
 /** Build a catalog-card preview from the in-progress draft. */

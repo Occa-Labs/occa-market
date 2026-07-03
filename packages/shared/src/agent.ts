@@ -72,6 +72,31 @@ export type AgentSkillInput = {
   repoPath?: string;
 };
 
+/**
+ * A tool the provider brings: one MCP server entry, keyed by `name`. `config`
+ * is the value under `mcpServers.<name>` in standard MCP JSON (command/args/env
+ * for stdio, or type/url/headers for remote). INTERNAL — seeded into the
+ * agent's gateway workspace as .mcp.json (blueprint §12) and never shown in
+ * the public catalog, which sees only the name.
+ */
+export type AgentToolInput = {
+  name: string;
+  config: Record<string, unknown>;
+};
+
+/**
+ * One step of the agent's public playbook ("How it works"). `uses` optionally
+ * names the skills/tools (by their declared names) the step draws on — pills
+ * on the detail-page timeline, a "(use X)" hint in the runtime prompt, and
+ * later the anchor for mapping live gateway tool_use events onto declared
+ * steps. Declarative only — the runtime self-orchestrates; nothing enforces
+ * step order.
+ */
+export type AgentWorkflowStep = {
+  text: string;
+  uses: string[];
+};
+
 export type AgentDetail = {
   longDescription: string;
   capabilities: string[];
@@ -79,8 +104,8 @@ export type AgentDetail = {
   skills: AgentSkill[];
   /** integrations the agent calls to do its work, not raw inference (§12) */
   tools: string[];
-  /** ordered steps the agent runs per request — the connector/timeline motif */
-  workflow: string[];
+  /** the agent's playbook for its core job — the connector/timeline motif */
+  workflow: AgentWorkflowStep[];
   examplePrompts: string[];
   sampleOutput: SampleOutput;
   /** extra canned reply variants for the chat surface (beyond sampleOutput) */

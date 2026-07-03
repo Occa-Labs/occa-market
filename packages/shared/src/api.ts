@@ -9,6 +9,8 @@ import type {
   AgentCategory,
   AgentDetail,
   AgentSkillInput,
+  AgentToolInput,
+  AgentWorkflowStep,
   MarketAgent,
 } from "./agent";
 import type { AuthUser } from "./auth";
@@ -51,8 +53,8 @@ export type CreateAgentRequest = {
   persona: string;
   pricePerMsg: number;
   skills: AgentSkillInput[];
-  tools: string[];
-  workflow: string[];
+  tools: AgentToolInput[];
+  workflow: AgentWorkflowStep[];
 };
 
 /** POST /api/agents response. */

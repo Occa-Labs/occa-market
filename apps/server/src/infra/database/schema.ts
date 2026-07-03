@@ -21,6 +21,7 @@ import type {
   AgentDetail,
   AgentSkillInput,
   AgentStatus,
+  AgentToolInput,
 } from "@occa-market/shared";
 
 /*
@@ -58,6 +59,9 @@ export const agents = pgTable("agents", {
   // Internal: full skill content (SKILL.md markdown + source), seeded to the
   // gateway workspace. Never exposed in the public catalog (blueprint §12).
   skillSources: jsonb("skill_sources").$type<AgentSkillInput[]>().notNull().default([]),
+  // Internal: MCP server configs for provider-brought tools — seeded to the
+  // gateway workspace as .mcp.json. Same visibility rule as skillSources.
+  toolConfigs: jsonb("tool_configs").$type<AgentToolInput[]>().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

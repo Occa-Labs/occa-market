@@ -28,10 +28,13 @@ export const AGENT_DETAILS: Record<string, AgentDetail> = {
     ].map(sk),
     tools: ["DEX pair feed", "On-chain RPC", "Token sniffer", "Block explorer"],
     workflow: [
-      "Listen for new pairs across tracked DEXes",
-      "Pull contract, liquidity, and holder data",
-      "Run risk checks: mint authority, LP lock, wallet concentration",
-      "Return a plain-language breakdown with the flags",
+      { text: "Listen for new pairs across tracked DEXes", uses: ["DEX pair feed"] },
+      { text: "Pull contract, liquidity, and holder data", uses: ["On-chain RPC", "Block explorer"] },
+      {
+        text: "Run risk checks: mint authority, LP lock, wallet concentration",
+        uses: ["Token sniffer", "Risk flagging"],
+      },
+      { text: "Return a plain-language breakdown with the flags", uses: [] },
     ],
     examplePrompts: [
       "New launches today",
@@ -154,10 +157,10 @@ export const AGENT_DETAILS: Record<string, AgentDetail> = {
     ].map(sk),
     tools: ["Price feed", "OHLCV history", "Indicator engine"],
     workflow: [
-      "Pull OHLCV history for the ticker",
-      "Compute indicators: RSI, MACD, moving averages",
-      "Detect trend, key levels, and patterns",
-      "Return a plain technical breakdown",
+      { text: "Pull OHLCV history for the ticker", uses: ["OHLCV history"] },
+      { text: "Compute indicators: RSI, MACD, moving averages", uses: ["Indicator engine"] },
+      { text: "Detect trend, key levels, and patterns", uses: ["Trend detection"] },
+      { text: "Return a plain technical breakdown", uses: [] },
     ],
     examplePrompts: [
       "Break down $SOL",
@@ -237,10 +240,10 @@ export const AGENT_DETAILS: Record<string, AgentDetail> = {
     skills: ["Hook writing", "Thread structure", "Tone matching", "Editing"].map(sk),
     tools: ["Trend feed", "Draft store"],
     workflow: [
-      "Take your idea or rough draft",
-      "Find the angle and write the hook",
-      "Structure the body into clean beats",
-      "Return a ready-to-post thread",
+      { text: "Take your idea or rough draft", uses: [] },
+      { text: "Find the angle and write the hook", uses: ["Hook writing"] },
+      { text: "Structure the body into clean beats", uses: ["Thread structure"] },
+      { text: "Return a ready-to-post thread", uses: ["Editing"] },
     ],
     examplePrompts: [
       "Thread about why monorepos win",
@@ -288,10 +291,10 @@ export function fallbackDetail(agent: SeedAgent): AgentDetail {
     skills: [`${agent.category} workspace`, "Structured output", "Plain-language replies"].map(sk),
     tools: ["Live data feed", "On-chain RPC"],
     workflow: [
-      "Take your request",
-      "Pull the data it needs",
-      "Run its workspace skills",
-      "Return ready-to-use output",
+      { text: "Take your request", uses: [] },
+      { text: "Pull the data it needs", uses: ["Live data feed"] },
+      { text: "Run its workspace skills", uses: [] },
+      { text: "Return ready-to-use output", uses: [] },
     ],
     examplePrompts: ["What can you do?", "Run this for me", "Show me an example"],
     sampleOutput: {

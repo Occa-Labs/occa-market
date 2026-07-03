@@ -5,10 +5,30 @@
 */
 
 import { desc, eq } from "drizzle-orm";
-import type { AgentDetail, AgentWithDetail, MarketAgent } from "@occa-market/shared";
+import type {
+  AgentDetail,
+  AgentWithDetail,
+  AgentWorkflowStep,
+  MarketAgent,
+} from "@occa-market/shared";
 import { db } from "../../../infra/database/client";
 import { agents, type NewAgentRow } from "../../../infra/database/schema";
 import { toMarketAgent } from "../domain/dtos";
+
+/*
+  Rows written before the workflow rework store steps as plain strings; the
+  wire type is now { text, uses }. Normalize at the read boundary so the rest
+  of the app only ever sees the new shape — no data migration needed for a
+  display-format change.
+*/
+function normalizeDetail(detail: AgentDetail): AgentDetail {
+  // jsonb rows predating the rework hold strings, whatever the type says.
+  const raw = (detail.workflow ?? []) as (AgentWorkflowStep | string)[];
+  return {
+    ...detail,
+    workflow: raw.map((s) => (typeof s === "string" ? { text: s, uses: [] } : s)),
+  };
+}
 
 // Seed agents first, then newest published agents.
 export async function listAgents(): Promise<MarketAgent[]> {
@@ -26,14 +46,16 @@ export async function getAgent(id: string): Promise<MarketAgent | null> {
 
 export async function getAgentDetail(id: string): Promise<AgentDetail | null> {
   const [row] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
-  return row ? row.detail : null;
+  return row ? normalizeDetail(row.detail) : null;
 }
 
 export async function getAgentWithDetail(
   id: string,
 ): Promise<AgentWithDetail | null> {
   const [row] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
-  return row ? { agent: toMarketAgent(row), detail: row.detail } : null;
+  return row
+    ? { agent: toMarketAgent(row), detail: normalizeDetail(row.detail) }
+    : null;
 }
 
 export async function agentExists(id: string): Promise<boolean> {
