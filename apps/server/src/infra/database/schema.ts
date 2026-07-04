@@ -91,6 +91,9 @@ export const chatSessions = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
+    // Public share handle. Non-null = anyone with the link can read the
+    // session at /share/<shareId>; null = private (the default).
+    shareId: uuid("share_id").unique(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     lastMessageAt: timestamp("last_message_at", { withTimezone: true })
       .notNull()

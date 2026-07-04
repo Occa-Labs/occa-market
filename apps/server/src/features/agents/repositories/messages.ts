@@ -14,8 +14,10 @@ import type {
 } from "@occa-market/shared";
 import { db } from "../../../infra/database/client";
 import {
+  agents,
   chatMessages,
   chatSessions,
+  type AgentRow,
   type ChatMessageRow,
   type ChatSessionRow,
 } from "../../../infra/database/schema";
@@ -24,6 +26,7 @@ function toChatSession(row: ChatSessionRow): ChatSession {
   return {
     id: row.id,
     title: row.title,
+    shareId: row.shareId ?? undefined,
     createdAt: row.createdAt.toISOString(),
     lastMessageAt: row.lastMessageAt.toISOString(),
   };
@@ -89,6 +92,30 @@ export async function createSession(
 
 export async function deleteSession(sessionId: string): Promise<void> {
   await db.delete(chatSessions).where(eq(chatSessions.id, sessionId));
+}
+
+/** Set (or clear, with null) a session's public share handle. */
+export async function setSessionShare(
+  sessionId: string,
+  shareId: string | null,
+): Promise<void> {
+  await db
+    .update(chatSessions)
+    .set({ shareId })
+    .where(eq(chatSessions.id, sessionId));
+}
+
+/** A shared session with its agent, by public share handle — else null. */
+export async function getSharedSession(
+  shareId: string,
+): Promise<{ session: ChatSession; agent: AgentRow } | null> {
+  const [row] = await db
+    .select({ session: chatSessions, agent: agents })
+    .from(chatSessions)
+    .innerJoin(agents, eq(agents.id, chatSessions.agentId))
+    .where(eq(chatSessions.shareId, shareId))
+    .limit(1);
+  return row ? { session: toChatSession(row.session), agent: row.agent } : null;
 }
 
 export async function listSessionMessages(

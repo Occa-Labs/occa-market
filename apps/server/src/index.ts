@@ -8,6 +8,7 @@ import cors from "cors";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { env } from "./config/env";
 import { agentsFeatureRouter } from "./features/agents/routes";
+import { sharesRoutes } from "./features/agents/routes/shares";
 import { authRoutes } from "./features/auth/routes";
 import { statsRouter } from "./features/market/routes/stats";
 
@@ -22,6 +23,7 @@ app.get("/health", (_req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/agents", agentsFeatureRouter);
+app.use("/api/shares", sharesRoutes);
 app.use("/api/stats", statsRouter);
 
 // Global error handler — async route rejections (e.g. DB errors) land here as a

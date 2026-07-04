@@ -16,6 +16,7 @@ import {
   getOwnedSession,
   listSessionMessages,
   listSessions,
+  setSessionShare,
   toChatTurn,
 } from "../repositories/messages";
 import { runtime } from "../services/runtime/registry";
@@ -76,6 +77,47 @@ messagesRoutes.delete(
       return;
     }
     await deleteSession(session.id);
+    res.json({ ok: true });
+  }),
+);
+
+// POST /api/agents/:id/sessions/:sessionId/share — make a session public.
+// Minting is idempotent: an already-shared session keeps its handle.
+messagesRoutes.post(
+  "/:id/sessions/:sessionId/share",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const session = await getOwnedSession(
+      req.params.sessionId,
+      req.params.id,
+      req.user!.userId,
+    );
+    if (!session) {
+      res.status(404).json({ error: "unknown session" });
+      return;
+    }
+    const shareId = session.shareId ?? crypto.randomUUID();
+    if (!session.shareId) await setSessionShare(session.id, shareId);
+    res.json({ shareId });
+  }),
+);
+
+// DELETE /api/agents/:id/sessions/:sessionId/share — make it private again.
+// The handle is discarded, so re-sharing mints a fresh link.
+messagesRoutes.delete(
+  "/:id/sessions/:sessionId/share",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const session = await getOwnedSession(
+      req.params.sessionId,
+      req.params.id,
+      req.user!.userId,
+    );
+    if (!session) {
+      res.status(404).json({ error: "unknown session" });
+      return;
+    }
+    await setSessionShare(session.id, null);
     res.json({ ok: true });
   }),
 );

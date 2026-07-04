@@ -22,6 +22,8 @@ import type {
   MarketStats,
   SendMessageRequest,
   SendMessageResponse,
+  SharedSessionResponse,
+  ShareSessionResponse,
   SkillImportResponse,
 } from "@occa-market/shared";
 import { config } from "./config";
@@ -208,4 +210,39 @@ export async function deleteChatSession(
     headers: authHeaders(),
   });
   return res.ok;
+}
+
+/** Make a session public; returns its share handle (idempotent). */
+export async function shareChatSession(
+  id: string,
+  sessionId: string,
+): Promise<string | null> {
+  const res = await fetch(`${base}/api/agents/${id}/sessions/${sessionId}/share`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as ShareSessionResponse;
+  return data.shareId;
+}
+
+/** Make a shared session private again. */
+export async function unshareChatSession(
+  id: string,
+  sessionId: string,
+): Promise<boolean> {
+  const res = await fetch(`${base}/api/agents/${id}/sessions/${sessionId}/share`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  return res.ok;
+}
+
+/** A publicly shared session — no auth. Null when the link is dead. */
+export async function getSharedSession(
+  shareId: string,
+): Promise<SharedSessionResponse | null> {
+  const res = await fetch(`${base}/api/shares/${shareId}`, { cache: "no-store" });
+  if (!res.ok) return null;
+  return res.json() as Promise<SharedSessionResponse>;
 }

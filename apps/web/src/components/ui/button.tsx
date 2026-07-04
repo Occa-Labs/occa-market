@@ -71,6 +71,8 @@ type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
   size?: Size;
   withArrow?: boolean;
   href?: string;
+  target?: string;
+  rel?: string;
   children: ReactNode;
 };
 
@@ -79,6 +81,8 @@ export function Button({
   size = "md",
   withArrow = false,
   href,
+  target,
+  rel,
   className,
   children,
   ...rest
@@ -93,7 +97,7 @@ export function Button({
 
   if (href) {
     return (
-      <a href={href} className={classes}>
+      <a href={href} target={target} rel={rel} className={classes}>
         {content}
       </a>
     );

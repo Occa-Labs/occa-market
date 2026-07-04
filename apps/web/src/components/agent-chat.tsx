@@ -5,7 +5,8 @@ import Link from "next/link";
 import { ArrowLeft, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { SampleOutput } from "@/components/sample-output";
+import { ChatStream } from "@/components/chat-stream";
+import { ShareSession } from "@/components/share-session";
 import type {
   ChatMessage,
   ChatSession,
@@ -55,6 +56,7 @@ export function AgentChat({
 
   const signedOut = status === "unauthenticated" || status === "disabled";
   const broke = !unmetered && credit < price;
+  const activeSession = sessions.find((s) => s.id === activeId) ?? null;
 
   // Sessions live server-side, keyed by the signed-in user. Pull the list once
   // the session resolves and reopen the most recent conversation.
@@ -166,13 +168,28 @@ export function AgentChat({
         </Link>
 
         {!signedOut && (
-          <span
-            className={`rounded-full border bg-surface-2 px-3 py-1 font-mono text-xs tabular-nums ${
-              broke ? "border-warn/30 text-warn" : "border-line text-muted"
-            }`}
-          >
-            {unmetered ? "dev · unmetered" : `$${credit.toFixed(2)} credit`}
-          </span>
+          <div className="flex items-center gap-2">
+            {activeSession && (
+              <ShareSession
+                agent={agent}
+                session={activeSession}
+                onChange={(shareId) =>
+                  setSessions((prev) =>
+                    prev.map((s) =>
+                      s.id === activeSession.id ? { ...s, shareId } : s,
+                    ),
+                  )
+                }
+              />
+            )}
+            <span
+              className={`rounded-full border bg-surface-2 px-3 py-1 font-mono text-xs tabular-nums ${
+                broke ? "border-warn/30 text-warn" : "border-line text-muted"
+              }`}
+            >
+              {unmetered ? "dev · unmetered" : `$${credit.toFixed(2)} credit`}
+            </span>
+          </div>
         )}
       </div>
 
@@ -268,21 +285,7 @@ export function AgentChat({
                 </p>
               </div>
             )}
-            {messages.map((m, i) =>
-              m.role === "user" ? (
-                <div key={i} className="flex justify-end">
-                  <div className="max-w-[80%] rounded-2xl rounded-br-md border border-line bg-surface-2 px-4 py-2.5 font-mono text-sm text-fg">
-                    {m.text}
-                  </div>
-                </div>
-              ) : (
-                <SampleOutput
-                  key={i}
-                  agent={agent}
-                  output={{ prompt: "", blocks: m.blocks }}
-                />
-              ),
-            )}
+            <ChatStream agent={agent} items={messages} />
             {sending && <Typing agent={agent} />}
           </div>
 

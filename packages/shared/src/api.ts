@@ -38,6 +38,8 @@ export type SendMessageRequest = {
 export type ChatSession = {
   id: string;
   title: string;
+  /** Present when the session is publicly shared at /share/<shareId>. */
+  shareId?: string;
   createdAt: string;
   lastMessageAt: string;
 };
@@ -59,6 +61,21 @@ export type ChatMessage = {
 
 /** GET /api/agents/:id/sessions/:sessionId/messages response. */
 export type ChatHistoryResponse = { messages: ChatMessage[] };
+
+/** POST /api/agents/:id/sessions/:sessionId/share response. */
+export type ShareSessionResponse = { shareId: string };
+
+/**
+ * GET /api/shares/:shareId response — a publicly shared session, read-only.
+ * Carries the agent's public projection so the page can render identity and
+ * point back at the catalog; never any runtime or provider internals.
+ */
+export type SharedSessionResponse = {
+  agent: MarketAgent;
+  title: string;
+  createdAt: string;
+  messages: ChatMessage[];
+};
 
 export type MessageUsage = { costUsd: number };
 
