@@ -13,6 +13,15 @@ function shorten(address: string): string {
     : address;
 }
 
+/** iro*****er@gmail.com — enough to recognize yourself, not enough to leak. */
+function maskEmail(email: string): string {
+  const at = email.indexOf("@");
+  if (at <= 2) return email;
+  const local = email.slice(0, at);
+  const tail = local.length > 5 ? local.slice(-2) : "";
+  return `${local.slice(0, 2)}*****${tail}${email.slice(at)}`;
+}
+
 /*
   The signed-in wallet pill. Clicking it opens the account popover: the full
   address (selectable), a copy action, and the signed-in email when present.
@@ -53,7 +62,7 @@ function AccountPill({
             </p>
             {email && (
               <p className="mt-2 font-mono text-xs text-faint">
-                Signed in as <span className="text-muted">{email}</span>
+                Signed in as <span className="text-muted">{maskEmail(email)}</span>
               </p>
             )}
             <div className="mt-3">
