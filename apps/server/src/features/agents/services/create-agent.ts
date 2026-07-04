@@ -11,8 +11,9 @@
 import type { AgentDetail, MarketAgent } from "@occa-market/shared";
 import type { NewAgentRow } from "../../../infra/database/schema";
 import { gatewaySeed } from "../../../infra/gateway/client";
-import { agentExists, insertAgent } from "../repositories/agents";
+import { agentExists, getAgentRow, insertAgent } from "../repositories/agents";
 import type { CreateAgentBody, UpdateAgentBody } from "../domain/schemas";
+import { ensureAgentOnchain } from "./onchain";
 import { buildSeedFiles } from "./runtime/seed";
 
 const DEFAULT_ACCENT = "#2ee6d6";
@@ -115,6 +116,13 @@ export async function publishAgent(
   };
 
   const agent = await insertAgent(row);
+
+  // Mint the on-chain identity + deployment in the background — two devnet
+  // txs must not sit in the publish latency, and the hourly sweep retries
+  // any miss. Publish never fails on a chain hiccup.
+  void getAgentRow(id)
+    .then((stored) => (stored ? ensureAgentOnchain(stored) : false))
+    .catch((err) => console.error(`[onchain] publish registration failed for ${id}:`, err));
 
   // Push the workspace onto the provider's gateway. Publish still succeeds if
   // the push fails — the catalog row is real, and the workspace can be pushed

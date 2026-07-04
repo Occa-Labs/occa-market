@@ -37,6 +37,7 @@ export default async function AgentPage({
           agent={record.agent}
           detail={record.detail}
           runtime={record.runtime}
+          onchain={record.onchain}
         />
       </main>
       <SiteFooter />

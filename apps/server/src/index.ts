@@ -9,6 +9,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { env } from "./config/env";
 import { agentsFeatureRouter } from "./features/agents/routes";
 import { sharesRoutes } from "./features/agents/routes/shares";
+import { startAnchorScheduler } from "./features/agents/services/onchain";
 import { authRoutes } from "./features/auth/routes";
 import { statsRouter } from "./features/market/routes/stats";
 
@@ -36,4 +37,7 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(env.port, () => {
   console.log(`[server] OCCA Open Market API listening on :${env.port}`);
+  // Register agents + commit daily provenance anchors on-chain (devnet).
+  // No-op unless the ONCHAIN_* env block is configured.
+  startAnchorScheduler();
 });

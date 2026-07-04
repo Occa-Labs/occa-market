@@ -16,3 +16,6 @@ CLAUDE.md
 agent-marketplace-blueprint.md
 agent-marketplace-token.md
 demo-agent-degen-scout.md
+
+# On-chain signer keypairs (devnet) — never commit
+.keys/

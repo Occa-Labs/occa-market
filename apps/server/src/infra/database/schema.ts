@@ -7,12 +7,14 @@
 */
 
 import {
+  bigint,
   boolean,
   doublePrecision,
   index,
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -74,8 +76,19 @@ export const agents = pgTable("agents", {
   ownerUserId: uuid("owner_user_id").references(() => users.id, {
     onDelete: "set null",
   }),
+  // On-chain footprint under the "OCCA Market" company (OCCA registry,
+  // devnet): AgentIdentity + Deployment PDAs minted at registration. Null =
+  // not registered yet; the daily anchor job only covers registered agents.
+  onchain: jsonb("onchain").$type<AgentOnchainInfo>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export type AgentOnchainInfo = {
+  agentPubkey: string;
+  identityPda: string;
+  deploymentPda: string;
+  deploymentIndex: number;
+};
 
 export type AgentRow = typeof agents.$inferSelect;
 export type NewAgentRow = typeof agents.$inferInsert;
@@ -156,3 +169,26 @@ export const messageRatings = pgTable(
 );
 
 export type MessageRatingRow = typeof messageRatings.$inferSelect;
+
+/*
+  Daily anchors — one row per (agent, UTC day) committed on-chain via the
+  registry's commit_daily_anchor. Mirrors the DailyAnchorAccount so reads
+  never need an RPC round-trip; the chain stays the tamper-evident source.
+*/
+export const dailyAnchors = pgTable(
+  "daily_anchors",
+  {
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    // UTC midnight of the anchored day, unix seconds — the on-chain PDA seed.
+    dayUnix: bigint("day_unix", { mode: "number" }).notNull(),
+    merkleRoot: text("merkle_root").notNull(),
+    taskCount: integer("task_count").notNull(),
+    txSig: text("tx_sig").notNull(),
+    committedAt: timestamp("committed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.agentId, t.dayUnix] })],
+);
+
+export type DailyAnchorRow = typeof dailyAnchors.$inferSelect;

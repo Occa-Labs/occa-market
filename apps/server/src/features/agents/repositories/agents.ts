@@ -4,9 +4,10 @@
   (now Drizzle/Postgres) stays out of the rest of the feature.
 */
 
-import { and, count, desc, eq, gt } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNotNull, isNull } from "drizzle-orm";
 import type {
   AgentDetail,
+  AgentOnchain,
   AgentWithDetail,
   AgentWorkflowStep,
   MarketAgent,
@@ -17,7 +18,9 @@ import {
   type AgentRow,
   type NewAgentRow,
 } from "../../../infra/database/schema";
+import { onchainCluster } from "../../../infra/onchain/client";
 import { toMarketAgent } from "../domain/dtos";
+import { countAnchors, getLatestAnchor } from "./anchors";
 
 /*
   Rows written before the workflow rework store steps as plain strings; the
@@ -66,6 +69,29 @@ export async function getAgentWithDetail(
     .where(
       and(eq(agents.category, row.category), gt(agents.reputation, row.reputation)),
     );
+  // On-chain footprint: PDAs from the row, anchor history from the local
+  // mirror (no RPC on the read path — the chain stays the audit trail).
+  let onchain: AgentOnchain | undefined;
+  if (row.onchain) {
+    const [last, anchoredDays] = await Promise.all([
+      getLatestAnchor(row.id),
+      countAnchors(row.id),
+    ]);
+    onchain = {
+      identityPda: row.onchain.identityPda,
+      deploymentPda: row.onchain.deploymentPda,
+      cluster: onchainCluster(),
+      anchoredDays,
+      lastAnchor: last
+        ? {
+            dayUnix: Number(last.dayUnix),
+            taskCount: last.taskCount,
+            merkleRoot: last.merkleRoot,
+            txSig: last.txSig,
+          }
+        : undefined,
+    };
+  }
   return {
     agent: toMarketAgent(row),
     detail: { ...normalizeDetail(row.detail), categoryRank: ahead + 1 },
@@ -74,6 +100,7 @@ export async function getAgentWithDetail(
     runtime: row.runtime
       ? { adapterType: row.runtime.adapterType, model: row.runtime.model }
       : undefined,
+    onchain,
   };
 }
 
@@ -108,6 +135,28 @@ export async function listAgentsByOwner(userId: string): Promise<MarketAgent[]> 
     .where(eq(agents.ownerUserId, userId))
     .orderBy(desc(agents.createdAt));
   return rows.map(toMarketAgent);
+}
+
+/** Rows not yet registered on-chain — the registration backfill's worklist. */
+export async function listAgentsWithoutOnchain(): Promise<AgentRow[]> {
+  return db.select().from(agents).where(isNull(agents.onchain));
+}
+
+/**
+ * Next free deployment index under the market company. Registrations are
+ * serialized (boot backfill + publish path); a race would fail loudly at the
+ * PDA init, never overwrite.
+ */
+export async function nextDeploymentIndex(): Promise<number> {
+  const rows = await db
+    .select({ onchain: agents.onchain })
+    .from(agents)
+    .where(isNotNull(agents.onchain));
+  const max = rows.reduce(
+    (acc, r) => Math.max(acc, r.onchain?.deploymentIndex ?? -1),
+    -1,
+  );
+  return max + 1;
 }
 
 /** Apply a revision to an existing agent; null when the id is unknown. */

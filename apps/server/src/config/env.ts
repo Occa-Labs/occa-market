@@ -43,6 +43,19 @@ const envSchema = z.object({
   // GitHub PAT for importing skills from public repos. Optional — anon GitHub
   // API is 60 req/hr, a token raises it. Fine-grained, public repo read is enough.
   GITHUB_TOKEN: opt(z.string().min(1).optional()),
+  // On-chain provenance (OCCA registry program, devnet). Anchoring activates
+  // only when company PDA + both keypair paths are set; without them the app
+  // runs fully off-chain.
+  ONCHAIN_RPC_URL: opt(z.string().url().default("https://api.devnet.solana.com")),
+  ONCHAIN_REGISTRY_PROGRAM_ID: opt(
+    z.string().min(32).default("occaTHMv5eYG5aZ85jimxTvHkBfsDCvndXC6J2k8kxr"),
+  ),
+  ONCHAIN_TREASURY_PROGRAM_ID: opt(
+    z.string().min(32).default("occaxyVLnurdjedWCBPrvDCCto8wGYadtTZ3nAmcVzh"),
+  ),
+  ONCHAIN_COMPANY_PDA: opt(z.string().min(32).optional()),
+  ONCHAIN_OWNER_KEYPAIR: opt(z.string().min(1).optional()),
+  ONCHAIN_ANCHOR_KEYPAIR: opt(z.string().min(1).optional()),
 });
 
 function loadEnv() {
@@ -68,6 +81,17 @@ function loadEnv() {
     privyAppId: e.PRIVY_APP_ID,
     privyAppSecret: e.PRIVY_APP_SECRET,
     githubToken: e.GITHUB_TOKEN,
+    onchain: {
+      rpcUrl: e.ONCHAIN_RPC_URL,
+      registryProgramId: e.ONCHAIN_REGISTRY_PROGRAM_ID,
+      treasuryProgramId: e.ONCHAIN_TREASURY_PROGRAM_ID,
+      companyPda: e.ONCHAIN_COMPANY_PDA,
+      ownerKeypairPath: e.ONCHAIN_OWNER_KEYPAIR,
+      anchorKeypairPath: e.ONCHAIN_ANCHOR_KEYPAIR,
+      enabled: Boolean(
+        e.ONCHAIN_COMPANY_PDA && e.ONCHAIN_OWNER_KEYPAIR && e.ONCHAIN_ANCHOR_KEYPAIR,
+      ),
+    },
   } as const;
 }
 

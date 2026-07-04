@@ -1,0 +1,1799 @@
+{
+  "address": "occaTHMv5eYG5aZ85jimxTvHkBfsDCvndXC6J2k8kxr",
+  "metadata": {
+    "name": "registry",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "OCCA Registry — Company, AgentIdentity, and Deployment accounts on Solana"
+  },
+  "instructions": [
+    {
+      "name": "commit_daily_anchor",
+      "docs": [
+        "Commit a daily Merkle root anchor for a deployment's task hashes.",
+        "",
+        "Per Whitepaper §2 trace architecture: per-task records live off-chain",
+        "in OCCA's database; this anchor proves OCCA didn't tamper with that",
+        "day's task list. Anyone can re-hash off-chain records and verify",
+        "against `merkle_root`.",
+        "",
+        "Seeds: `[\"daily_anchor\", deployment_pda, day_unix_le_i64]`.",
+        "PDA collision = at most one anchor per (deployment, day). Re-attempts",
+        "on the same key fail naturally (Anchor `init` rejects).",
+        "",
+        "Authorization: signed by the Anchor Wallet registered as",
+        "`OperationsAccount[Anchor]` in the treasury program. The signer",
+        "pubkey must equal `operations.signer`; this ix's discriminator must",
+        "be in `operations.action_whitelist`. The OperationsAccount is",
+        "resolved via cross-program PDA lookup (`seeds::program = treasury::ID`).",
+        "",
+        "Phase 1 rate limit: NOT enforced. Registry cannot mutate the",
+        "treasury-owned OperationsAccount's `signatures_this_period` counter",
+        "without an extra CPI. PDA collision (one per deployment+day) provides",
+        "natural deduplication; rent burn (~0.002 SOL each) caps griefing.",
+        "If a stronger rate limit becomes necessary, add a treasury CPI ix",
+        "`tick_anchor_signature` and wire it here."
+      ],
+      "discriminator": [
+        18,
+        7,
+        3,
+        65,
+        58,
+        148,
+        164,
+        0
+      ],
+      "accounts": [
+        {
+          "name": "deployment",
+          "docs": [
+            "Deployment whose task stream this anchor covers."
+          ]
+        },
+        {
+          "name": "company",
+          "docs": [
+            "CompanyAccount referenced by deployment. Verified via",
+            "`deployment.company == company.key()` constraint in handler so we",
+            "can also resolve the OperationsAccount[Anchor] PDA."
+          ]
+        },
+        {
+          "name": "anchor_signer",
+          "docs": [
+            "Anchor Wallet — pubkey verified against `operations.signer`."
+          ],
+          "signer": true
+        },
+        {
+          "name": "operations",
+          "docs": [
+            "`OperationsAccount[Anchor]` from treasury program. Resolved via",
+            "cross-program PDA derivation. Anchor `Account<T>` auto-verifies",
+            "owner = treasury::ID via `OperationsAccount`'s `Owner` impl."
+          ]
+        },
+        {
+          "name": "daily_anchor",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  97,
+                  105,
+                  108,
+                  121,
+                  95,
+                  97,
+                  110,
+                  99,
+                  104,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "deployment"
+              },
+              {
+                "kind": "arg",
+                "path": "day_unix"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Pays rent for the DailyAnchorAccount PDA."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "day_unix",
+          "type": "i64"
+        },
+        {
+          "name": "merkle_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "task_count",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "commit_trace",
+      "docs": [
+        "Anchor a single completed, verified deliverable on-chain — per-task",
+        "provenance. Where `commit_daily_anchor` commits one Merkle root over",
+        "a day's task stream, this records ONE deliverable: a link to the",
+        "result, the content hash that locks it, and the verification verdict",
+        "+ quality score.",
+        "",
+        "Only deliverables that PASSED the off-chain verification gate are",
+        "anchored (policy: keep unverified / spam output off the chain).",
+        "`verdict` is therefore always written `TRACE_VERDICT_PASSED`; failed",
+        "work is simply never committed through this ix.",
+        "",
+        "Per Whitepaper §2 trace architecture: the deliverable itself stays",
+        "off-chain. `content_hash` makes the result tamper-evident and",
+        "`evidence_hash` locks the off-chain verification report. Anyone can",
+        "re-hash the artifact + report and verify against these. The on-chain",
+        "`quality_score` + `rubric_version` make the quality signal itself",
+        "tamper-evident — the agent cannot self-assert it.",
+        "",
+        "Seeds: `[\"trace\", task_id]`. PDA collision = at most one anchor per",
+        "task. Re-attempts on the same `task_id` fail naturally (Anchor `init`",
+        "rejects).",
+        "",
+        "Authorization: identical model to `commit_daily_anchor` — signed by",
+        "the Anchor Wallet registered as `OperationsAccount[Anchor]`; this",
+        "ix's discriminator must be whitelisted on that account. Resolved via",
+        "cross-program PDA lookup (`seeds::program = treasury::ID`).",
+        "",
+        "Phase 1 rate limit: NOT enforced (same constraint as",
+        "`commit_daily_anchor` — registry cannot mutate the treasury-owned",
+        "ops counter without an extra CPI). PDA-per-task dedup + rent burn",
+        "cap griefing."
+      ],
+      "discriminator": [
+        58,
+        140,
+        230,
+        51,
+        170,
+        109,
+        228,
+        125
+      ],
+      "accounts": [
+        {
+          "name": "deployment",
+          "docs": [
+            "Deployment that produced this deliverable."
+          ]
+        },
+        {
+          "name": "company",
+          "docs": [
+            "CompanyAccount referenced by deployment. Verified via",
+            "`deployment.company == company.key()` in the handler so we can also",
+            "resolve the OperationsAccount[Anchor] PDA from it."
+          ]
+        },
+        {
+          "name": "anchor_signer",
+          "docs": [
+            "Anchor Wallet — pubkey verified against `operations.signer`."
+          ],
+          "signer": true
+        },
+        {
+          "name": "operations",
+          "docs": [
+            "`OperationsAccount[Anchor]` from treasury program. Resolved via",
+            "cross-program PDA derivation; Anchor `Account<T>` auto-verifies",
+            "owner = treasury::ID."
+          ]
+        },
+        {
+          "name": "trace_anchor",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "task_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Pays rent for the TraceAnchorAccount PDA."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "task_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "result_uri",
+          "type": "string"
+        },
+        {
+          "name": "content_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "quality_score",
+          "type": "u8"
+        },
+        {
+          "name": "rubric_version",
+          "type": "u8"
+        },
+        {
+          "name": "evidence_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "completed_at",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "create_company",
+      "docs": [
+        "Create a new CompanyAccount PDA + atomically initialize its",
+        "TreasuryAccount + PolicyAccount via CPI to the treasury program.",
+        "Per design §6: company creation never leaves a window where treasury",
+        "pointers are unset; any failure rolls back the entire transaction.",
+        "",
+        "Seeds: `[\"company\", owner, nonce_le_u32]`"
+      ],
+      "discriminator": [
+        36,
+        192,
+        217,
+        147,
+        233,
+        129,
+        198,
+        18
+      ],
+      "accounts": [
+        {
+          "name": "company",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  109,
+                  112,
+                  97,
+                  110,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "docs": [
+            "Owning user wallet — signer to prevent PDA squatting."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Pays rent for company + treasury + policy PDAs."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "TreasuryAccount PDA — created by `treasury::init_treasury` CPI in",
+            "the handler. Seed/owner verification happens inside that program."
+          ],
+          "writable": true
+        },
+        {
+          "name": "policy",
+          "docs": [
+            "PolicyAccount PDA — created by `treasury::init_treasury` CPI."
+          ],
+          "writable": true
+        },
+        {
+          "name": "treasury_program",
+          "docs": [
+            "Treasury program — invoked via CPI to atomically init treasury+policy."
+          ],
+          "address": "occaxyVLnurdjedWCBPrvDCCto8wGYadtTZ3nAmcVzh"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u32"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "locale",
+          "type": "string"
+        },
+        {
+          "name": "metadata_uri",
+          "type": "string"
+        },
+        {
+          "name": "metadata_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "create_deployment",
+      "docs": [
+        "Create a Deployment binding an existing AgentIdentity to a Company.",
+        "",
+        "Seeds: `[\"deployment\", company_pda, deployment_index_le_u32]`",
+        "",
+        "`deployment_index` is a per-company u32 counter — caller picks",
+        "the next free index. Same identity may be deployed multiple times",
+        "in the same company (e.g. retired then re-deployed) — each gets",
+        "its own index.",
+        "",
+        "Constraint: `identity.owner == company.owner`. Both fields are",
+        "immutable, so this binding is permanent."
+      ],
+      "discriminator": [
+        55,
+        207,
+        186,
+        101,
+        21,
+        218,
+        102,
+        171
+      ],
+      "accounts": [
+        {
+          "name": "company",
+          "docs": [
+            "Company the agent is being deployed into. Referenced only — the",
+            "company owner's consent to the hire is captured off-chain (the",
+            "invite), so the company owner is NOT a required signer here."
+          ]
+        },
+        {
+          "name": "identity",
+          "docs": [
+            "AgentIdentity being deployed. The IDENTITY owner signs — deploying",
+            "an agent (incl. into another owner's company, the marketplace case)",
+            "is authorized by the agent's owner accepting."
+          ]
+        },
+        {
+          "name": "owner",
+          "docs": [
+            "Agent owner (signer) — authorizes deploying THEIR agent."
+          ],
+          "signer": true,
+          "relations": [
+            "identity"
+          ]
+        },
+        {
+          "name": "deployment",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  112,
+                  108,
+                  111,
+                  121,
+                  109,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "company"
+              },
+              {
+                "kind": "arg",
+                "path": "deployment_index"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "deployment_index",
+          "type": "u32"
+        },
+        {
+          "name": "role",
+          "type": "string"
+        },
+        {
+          "name": "parent_deployment_index",
+          "type": {
+            "option": "u32"
+          }
+        },
+        {
+          "name": "adapter_id",
+          "type": "pubkey"
+        },
+        {
+          "name": "metadata_uri",
+          "type": "string"
+        },
+        {
+          "name": "metadata_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "register_agent_identity",
+      "docs": [
+        "Mint a new AgentIdentity PDA.",
+        "",
+        "Seeds: `[\"agent_identity\", agent_pubkey]`",
+        "",
+        "`agent_pubkey` is a caller-supplied identifier (typically derived",
+        "from a generated keypair held by the user wallet). It is the",
+        "stable identity of the agent across deployments. The recorded",
+        "`owner` is immutable — there is no transfer instruction."
+      ],
+      "discriminator": [
+        57,
+        31,
+        242,
+        205,
+        57,
+        129,
+        123,
+        35
+      ],
+      "accounts": [
+        {
+          "name": "identity",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  103,
+                  101,
+                  110,
+                  116,
+                  95,
+                  105,
+                  100,
+                  101,
+                  110,
+                  116,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "agent_pubkey"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "docs": [
+            "Identity owner (= user wallet that minted this identity)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "agent_pubkey",
+          "type": "pubkey"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "metadata_uri",
+          "type": "string"
+        },
+        {
+          "name": "metadata_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "retire_deployment",
+      "docs": [
+        "Retire a deployment. Terminal — once retired, this Deployment",
+        "PDA is read-only forever (preserves history). To re-engage the",
+        "same identity in the same company, create a new deployment with",
+        "the next deployment_index."
+      ],
+      "discriminator": [
+        45,
+        188,
+        162,
+        197,
+        136,
+        180,
+        202,
+        153
+      ],
+      "accounts": [
+        {
+          "name": "deployment",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "deployment"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "set_agent_receiving_address",
+      "docs": [
+        "Set or replace the agent's PERSONAL receiving wallet — the passive",
+        "destination for funds disbursed to this agent, intrinsic to the",
+        "identity (no company/deployment required). Pass `Pubkey::default()`",
+        "to clear. Identity-owner only. NEVER a signer — it only receives."
+      ],
+      "discriminator": [
+        197,
+        126,
+        122,
+        18,
+        38,
+        62,
+        179,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "identity",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "identity"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "new_receiving_address",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_receiving_address",
+      "docs": [
+        "Set or replace the deployment's receiving address — the passive",
+        "destination wallet that funds disbursed *to* this agent land in.",
+        "Pass `Pubkey::default()` to clear. Owner-only. NEVER a signer:",
+        "this address does not authorize on-chain actions, it only receives."
+      ],
+      "discriminator": [
+        70,
+        63,
+        44,
+        87,
+        16,
+        6,
+        156,
+        200
+      ],
+      "accounts": [
+        {
+          "name": "deployment",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "deployment"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "new_receiving_address",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "update_agent_identity_metadata",
+      "docs": [
+        "Update identity metadata (rename, change persona, etc.).",
+        "Identity-owner only."
+      ],
+      "discriminator": [
+        250,
+        182,
+        24,
+        200,
+        201,
+        147,
+        60,
+        183
+      ],
+      "accounts": [
+        {
+          "name": "identity",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "identity"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "metadata_uri",
+          "type": "string"
+        },
+        {
+          "name": "metadata_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_company_metadata",
+      "docs": [
+        "Update company metadata (name / locale / off-chain pointer).",
+        "Owner-only. Use to rename, update brand assets, etc."
+      ],
+      "discriminator": [
+        186,
+        229,
+        190,
+        16,
+        234,
+        141,
+        170,
+        89
+      ],
+      "accounts": [
+        {
+          "name": "company",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "company"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "locale",
+          "type": "string"
+        },
+        {
+          "name": "metadata_uri",
+          "type": "string"
+        },
+        {
+          "name": "metadata_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_company_status",
+      "docs": [
+        "Pause / resume a company. Paused companies should be skipped by",
+        "dispatchers off-chain. Owner-only."
+      ],
+      "discriminator": [
+        61,
+        6,
+        101,
+        120,
+        141,
+        13,
+        125,
+        75
+      ],
+      "accounts": [
+        {
+          "name": "company",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "company"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "new_status",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "update_deployment_metadata",
+      "docs": [
+        "Update deployment metadata (role, off-chain pointer).",
+        "Owner-only."
+      ],
+      "discriminator": [
+        100,
+        135,
+        41,
+        32,
+        16,
+        41,
+        29,
+        76
+      ],
+      "accounts": [
+        {
+          "name": "deployment",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "deployment"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "role",
+          "type": "string"
+        },
+        {
+          "name": "metadata_uri",
+          "type": "string"
+        },
+        {
+          "name": "metadata_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_deployment_status",
+      "docs": [
+        "Toggle deployment between Active and Paused. Owner-only.",
+        "Use `retire_deployment` for terminal transition."
+      ],
+      "discriminator": [
+        225,
+        195,
+        150,
+        254,
+        178,
+        203,
+        53,
+        147
+      ],
+      "accounts": [
+        {
+          "name": "deployment",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "deployment"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "new_status",
+          "type": "u8"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "AgentIdentity",
+      "discriminator": [
+        11,
+        149,
+        31,
+        27,
+        186,
+        76,
+        241,
+        72
+      ]
+    },
+    {
+      "name": "CompanyAccount",
+      "discriminator": [
+        37,
+        215,
+        171,
+        200,
+        8,
+        141,
+        69,
+        96
+      ]
+    },
+    {
+      "name": "DailyAnchorAccount",
+      "discriminator": [
+        218,
+        106,
+        107,
+        94,
+        194,
+        48,
+        111,
+        254
+      ]
+    },
+    {
+      "name": "Deployment",
+      "discriminator": [
+        66,
+        90,
+        104,
+        89,
+        183,
+        130,
+        64,
+        178
+      ]
+    },
+    {
+      "name": "TraceAnchorAccount",
+      "discriminator": [
+        159,
+        101,
+        186,
+        98,
+        211,
+        217,
+        119,
+        232
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Unauthorized",
+      "msg": "signer does not match the account owner"
+    },
+    {
+      "code": 6001,
+      "name": "NameRequired",
+      "msg": "name is required"
+    },
+    {
+      "code": 6002,
+      "name": "NameTooLong",
+      "msg": "name exceeds MAX_NAME_LEN"
+    },
+    {
+      "code": 6003,
+      "name": "LocaleTooLong",
+      "msg": "locale exceeds MAX_LOCALE_LEN"
+    },
+    {
+      "code": 6004,
+      "name": "RoleRequired",
+      "msg": "role is required"
+    },
+    {
+      "code": 6005,
+      "name": "RoleTooLong",
+      "msg": "role exceeds MAX_ROLE_LEN"
+    },
+    {
+      "code": 6006,
+      "name": "MetadataUriTooLong",
+      "msg": "metadata_uri exceeds MAX_METADATA_URI_LEN"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidStatus",
+      "msg": "invalid status value"
+    },
+    {
+      "code": 6008,
+      "name": "DeploymentRetired",
+      "msg": "deployment is retired and cannot be modified"
+    },
+    {
+      "code": 6009,
+      "name": "IdentityOwnerMismatch",
+      "msg": "identity owner does not match company owner"
+    },
+    {
+      "code": 6010,
+      "name": "EmptyAnchor",
+      "msg": "daily anchor must cover at least one task"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidDayBoundary",
+      "msg": "day_unix must be > 0 and aligned to 00:00:00 UTC (multiple of 86400)"
+    },
+    {
+      "code": 6012,
+      "name": "FutureAnchor",
+      "msg": "daily anchor cannot be for a future day"
+    },
+    {
+      "code": 6013,
+      "name": "DeploymentNotActive",
+      "msg": "deployment must be active to commit anchor"
+    },
+    {
+      "code": 6014,
+      "name": "CompanyMismatch",
+      "msg": "deployment.company does not match passed company account"
+    },
+    {
+      "code": 6015,
+      "name": "OperationsRevoked",
+      "msg": "operations account is revoked"
+    },
+    {
+      "code": 6016,
+      "name": "OperationsExpired",
+      "msg": "operations account is past its expiry"
+    },
+    {
+      "code": 6017,
+      "name": "WrongOperationsKind",
+      "msg": "operations account kind does not match instruction expectation"
+    },
+    {
+      "code": 6018,
+      "name": "DiscriminatorNotWhitelisted",
+      "msg": "instruction discriminator is not whitelisted on operations account"
+    },
+    {
+      "code": 6019,
+      "name": "InvalidDiscriminator",
+      "msg": "could not parse instruction discriminator"
+    },
+    {
+      "code": 6020,
+      "name": "ResultUriTooLong",
+      "msg": "result_uri exceeds MAX_RESULT_URI_LEN"
+    },
+    {
+      "code": 6021,
+      "name": "InvalidQualityScore",
+      "msg": "quality_score exceeds MAX_QUALITY_SCORE (0-100)"
+    },
+    {
+      "code": 6022,
+      "name": "InvalidCompletedAt",
+      "msg": "completed_at must be > 0 and not in the future"
+    }
+  ],
+  "types": [
+    {
+      "name": "AgentIdentity",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Schema version."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "agent_pubkey",
+            "docs": [
+              "Stable identity key — also baked into the PDA seed."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "Owning user wallet. Immutable — set at mint and never changes."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "receiving_address",
+            "docs": [
+              "The agent's PERSONAL receiving wallet — a passive destination for",
+              "funds disbursed to this agent, intrinsic to the identity (like a",
+              "person's bank account). Owner-set anytime via",
+              "`set_agent_receiving_address`, independent of any company/deployment.",
+              "At `create_deployment` the deployment's `receiving_address` defaults",
+              "to this. `Pubkey::default()` = unset. NEVER a signer."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Unix timestamp at mint."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "docs": [
+              "Unix timestamp of last state mutation."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "name",
+            "docs": [
+              "Display name (e.g. \"Aiden\"). Not unique — identities are",
+              "disambiguated by `agent_pubkey`."
+            ],
+            "type": "string"
+          },
+          {
+            "name": "metadata_uri",
+            "docs": [
+              "Off-chain metadata URI — persona, avatar, public bio."
+            ],
+            "type": "string"
+          },
+          {
+            "name": "metadata_hash",
+            "docs": [
+              "SHA-256 of metadata JSON."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "reputation_uri",
+            "docs": [
+              "Pointer to ReputationAccount (Phase 2). Empty string = unminted."
+            ],
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CompanyAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Schema version — bump on field changes."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "Owning user wallet — also baked into the PDA seed."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Pointer to TreasuryAccount PDA (Pubkey::default() until Phase 2)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "policy",
+            "docs": [
+              "Pointer to PolicyAccount PDA (Pubkey::default() until Phase 2)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Unix timestamp at creation."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "docs": [
+              "Unix timestamp of last state mutation."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "nonce",
+            "docs": [
+              "Seed disambiguator — same owner can register multiple companies."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Active=0, Paused=1."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "name",
+            "docs": [
+              "Display name."
+            ],
+            "type": "string"
+          },
+          {
+            "name": "locale",
+            "docs": [
+              "BCP-47 locale tag for default UI rendering (\"en\", \"id\", ...)."
+            ],
+            "type": "string"
+          },
+          {
+            "name": "metadata_uri",
+            "docs": [
+              "Off-chain metadata URI (IPFS / Arweave / HTTPS) — extended profile,",
+              "brand assets, etc."
+            ],
+            "type": "string"
+          },
+          {
+            "name": "metadata_hash",
+            "docs": [
+              "SHA-256 of canonical metadata JSON for integrity verification."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "DailyAnchorAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Schema version."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "deployment",
+            "docs": [
+              "Deployment whose task stream this anchor covers."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "company",
+            "docs": [
+              "CompanyAccount the deployment belongs to (denormalized for fast",
+              "indexing — avoids a deployment-account fetch on read)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "day_unix",
+            "docs": [
+              "Unix timestamp of 00:00:00 UTC for the day this anchor covers.",
+              "Aligned by `day_unix % 86_400 == 0` constraint at commit time."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "merkle_root",
+            "docs": [
+              "Merkle root over that day's task hashes (off-chain DB)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "task_count",
+            "docs": [
+              "Number of leaves (tasks) in the Merkle tree. Must be > 0 — empty",
+              "days produce no anchor (§2)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "committed_at",
+            "docs": [
+              "Unix timestamp when this commit landed on-chain."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "committed_by",
+            "docs": [
+              "Anchor Wallet pubkey that signed the commit. Mirror of",
+              "`OperationsAccount[Anchor].signer` at commit time."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump for PDA verification."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Deployment",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Schema version."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "agent_identity",
+            "docs": [
+              "AgentIdentity PDA this deployment belongs to."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "company",
+            "docs": [
+              "CompanyAccount PDA this deployment belongs to."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "deployment_index",
+            "docs": [
+              "Per-company counter — also part of the PDA seed."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "Mirror of `company.owner` for fast single-account auth checks."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "receiving_address",
+            "docs": [
+              "Passive destination wallet for funds disbursed *to* this agent",
+              "(Agent Receiving Address per Whitepaper §8.2 v0.10). NOT a signer",
+              "— never authorizes on-chain actions. Treasury disburse instructions",
+              "match against this field to identify intra-company transfers and",
+              "deduct the Agent Operating Fee. `Pubkey::default()` = unset",
+              "(disbursements to this deployment will fail until set)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "adapter_id",
+            "docs": [
+              "Pinned adapter (Pubkey::default() = unspecified)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "role",
+            "docs": [
+              "Capability persona / function tag (e.g. \"ceo\", \"sdr\"). NOT a",
+              "job title — see Whitepaper §15.7 + CLAUDE.md naming guardrails."
+            ],
+            "type": "string"
+          },
+          {
+            "name": "parent_deployment_index",
+            "docs": [
+              "Reporting parent within the company (None = top-level)."
+            ],
+            "type": {
+              "option": "u32"
+            }
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Active=0, Paused=1, Retired=2 (terminal)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "deployed_at",
+            "docs": [
+              "Unix timestamp when deployment was created."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "retired_at",
+            "docs": [
+              "Unix timestamp when retired (0 = still active)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "docs": [
+              "Unix timestamp of last state mutation."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "metadata_uri",
+            "docs": [
+              "Off-chain metadata URI — model preferences, skill list, etc."
+            ],
+            "type": "string"
+          },
+          {
+            "name": "metadata_hash",
+            "docs": [
+              "SHA-256 of metadata JSON."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "OperationsAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "company",
+            "type": "pubkey"
+          },
+          {
+            "name": "kind",
+            "docs": [
+              "What kind of operations key this is (Disbursement | Anchor).",
+              "Also encoded into the PDA seed so each company can host one of each."
+            ],
+            "type": {
+              "defined": {
+                "name": "OperationsKind"
+              }
+            }
+          },
+          {
+            "name": "signer",
+            "docs": [
+              "Pubkey of the registered wallet:",
+              "• Disbursement: operator-held only — OCCA never holds the privkey.",
+              "• Anchor: shared session key — operator + OCCA both hold privkey,",
+              "either can sign `commit_daily_anchor` (capability-scoped)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "action_whitelist",
+            "docs": [
+              "Whitelist of allowed instruction discriminators (8-byte Anchor",
+              "discriminators). Defaults set at registration:",
+              "• Disbursement: `[disburse_routine]`",
+              "• Anchor:       `[commit_daily_anchor]` (lives in Registry program)"
+            ],
+            "type": {
+              "vec": {
+                "array": [
+                  "u8",
+                  8
+                ]
+              }
+            }
+          },
+          {
+            "name": "rate_limit_per_period",
+            "type": "u32"
+          },
+          {
+            "name": "signatures_this_period",
+            "type": "u32"
+          },
+          {
+            "name": "current_period_anchor",
+            "docs": [
+              "Unix timestamp of start-of-current-month UTC. `0` = uninitialized."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "expiry_unix",
+            "docs": [
+              "Hard expiry (unix timestamp). `0` = no expiry."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "revoked",
+            "docs": [
+              "Once true, all future signatures via this account are rejected.",
+              "Rotation flow: revoke → close → re-create with new `signer`."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OperationsKind",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Disbursement"
+          },
+          {
+            "name": "Anchor"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TraceAnchorAccount",
+      "docs": [
+        "Per-deliverable provenance record. One per completed, verified task.",
+        "The deliverable content lives off-chain; this account locks its",
+        "identity, content hash, and verified quality so it is tamper-evident",
+        "and attributable. Reputation views are derived off-chain by folding",
+        "over these accounts per `agent`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": [
+              "Schema version."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "task_id",
+            "docs": [
+              "Hash of task creation params — globally unique task id, also baked",
+              "into the PDA seed."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "company",
+            "docs": [
+              "CompanyAccount the work was produced in (denormalized for indexing)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "agent",
+            "docs": [
+              "AgentIdentity PDA that produced the deliverable. Reputation",
+              "aggregates against this (stable across redeployments), NOT the",
+              "per-company deployment."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "deployment",
+            "docs": [
+              "Deployment PDA active when the work was produced (company context)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "result_uri",
+            "docs": [
+              "Link to the deliverable (article URL, PR, etc). Off-chain pointer."
+            ],
+            "type": "string"
+          },
+          {
+            "name": "content_hash",
+            "docs": [
+              "SHA-256 of the deliverable content at completion — tamper-evidence",
+              "for the result behind `result_uri`."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "verdict",
+            "docs": [
+              "Verification verdict. Always `TRACE_VERDICT_PASSED` — only passed",
+              "deliverables are anchored."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "quality_score",
+            "docs": [
+              "Rubric quality score 0-100 (see `MAX_QUALITY_SCORE`). Tamper-evident",
+              "quality signal, produced by the deterministic gate, not the agent."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "rubric_version",
+            "docs": [
+              "Version of the scoring rubric that produced `quality_score`. Scores",
+              "are only comparable within the same rubric version."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "evidence_hash",
+            "docs": [
+              "SHA-256 of the off-chain verification report (claims checked +",
+              "sources). Lets anyone audit WHY the verdict/score was assigned."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "completed_at",
+            "docs": [
+              "Unix timestamp the deliverable was completed off-chain."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "committed_at",
+            "docs": [
+              "Unix timestamp this commit landed on-chain."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "committed_by",
+            "docs": [
+              "Anchor Wallet pubkey that signed the commit. Mirror of",
+              "`OperationsAccount[Anchor].signer` at commit time."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump for PDA verification."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}

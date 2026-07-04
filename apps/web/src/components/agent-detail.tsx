@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, Wrench } from "lucide-react";
 import type {
   AgentDetail as AgentDetailData,
+  AgentOnchain,
   MarketAgent,
   PublicRuntime,
 } from "@occa-market/shared";
@@ -23,10 +24,12 @@ export function AgentDetail({
   agent,
   detail,
   runtime,
+  onchain,
 }: {
   agent: MarketAgent;
   detail: AgentDetailData;
   runtime?: PublicRuntime;
+  onchain?: AgentOnchain;
 }) {
   const online = agent.status === "online";
 
@@ -126,6 +129,54 @@ export function AgentDetail({
                     </span>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* on-chain provenance — the reputation inputs (runs + thumbs)
+                are committed as one Merkle root per UTC day, so the numbers
+                above are auditable against the chain */}
+            {onchain && (
+              <div className="mt-5 border-t border-line pt-5">
+                <p className="eyebrow mb-1.5">Provenance</p>
+                <div className="flex flex-col gap-1.5 font-mono text-xs">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-faint">Identity</span>
+                    <a
+                      href={`https://explorer.solana.com/address/${onchain.identityPda}?cluster=${onchain.cluster}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-link"
+                    >
+                      {shortAddress(onchain.identityPda)}
+                    </a>
+                  </div>
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-faint">Anchored</span>
+                    <span className="text-muted">
+                      {onchain.anchoredDays > 0
+                        ? `${onchain.anchoredDays} day${onchain.anchoredDays === 1 ? "" : "s"}`
+                        : "pending"}
+                    </span>
+                  </div>
+                  {onchain.lastAnchor && (
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-faint">Last anchor</span>
+                      <a
+                        href={`https://explorer.solana.com/tx/${onchain.lastAnchor.txSig}?cluster=${onchain.cluster}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-link"
+                      >
+                        {utcDay(onchain.lastAnchor.dayUnix)} · {onchain.lastAnchor.taskCount}{" "}
+                        {onchain.lastAnchor.taskCount === 1 ? "run" : "runs"}
+                      </a>
+                    </div>
+                  )}
+                </div>
+                <p className="mt-2 font-body text-xs leading-relaxed text-faint">
+                  Runs and ratings are committed to Solana daily, so reputation
+                  can be verified, not just trusted.
+                </p>
               </div>
             )}
           </Card>
@@ -317,6 +368,14 @@ export function AgentDetail({
 
     </div>
   );
+}
+
+function shortAddress(address: string): string {
+  return `${address.slice(0, 4)}…${address.slice(-4)}`;
+}
+
+function utcDay(dayUnix: number): string {
+  return new Date(dayUnix * 1000).toISOString().slice(0, 10);
 }
 
 function Stat({

@@ -137,12 +137,40 @@ export type AgentListResponse = { agents: MarketAgent[] };
  */
 export type PublicRuntime = { adapterType: string; model: string };
 
+/** One committed daily provenance anchor — mirrors the on-chain account. */
+export type OnchainAnchor = {
+  /** UTC midnight of the anchored day, unix seconds. */
+  dayUnix: number;
+  /** Agent replies covered by this root. */
+  taskCount: number;
+  /** Merkle root over the day's (messageId, contentHash, rating) leaves, hex. */
+  merkleRoot: string;
+  txSig: string;
+};
+
+/**
+ * The agent's on-chain footprint: AgentIdentity + Deployment PDAs under the
+ * "OCCA Market" company on the OCCA registry program. Usage + ratings — the
+ * reputation inputs — are committed as one Merkle root per UTC day, so the
+ * score shown in the catalog is auditable against the chain.
+ */
+export type AgentOnchain = {
+  identityPda: string;
+  deploymentPda: string;
+  /** Solana cluster the PDAs live on (explorer link target). */
+  cluster: string;
+  anchoredDays: number;
+  lastAnchor?: OnchainAnchor;
+};
+
 /** An agent paired with its detail record. */
 export type AgentWithDetail = {
   agent: MarketAgent;
   detail: AgentDetail;
   /** Present when the agent runs on a provider's gateway (BYORT). */
   runtime?: PublicRuntime;
+  /** Present when the agent is registered on-chain. */
+  onchain?: AgentOnchain;
 };
 
 /** GET /api/agents/:id response. */

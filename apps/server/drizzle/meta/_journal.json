@@ -71,6 +71,13 @@
       "when": 1783192209361,
       "tag": "0009_curvy_martin_li",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1783197718842,
+      "tag": "0010_lazy_vulcan",
+      "breakpoints": true
     }
   ]
 }
