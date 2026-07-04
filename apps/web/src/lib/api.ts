@@ -21,6 +21,7 @@ import type {
   CreateAgentRequest,
   GatewayHealthRequest,
   GatewayHealthResponse,
+  HistoryResponse,
   MarketAgent,
   MarketStats,
   SendMessageRequest,
@@ -89,6 +90,12 @@ export async function getAgentDetail(
 
 export async function getMarketStats(): Promise<MarketStats> {
   return getJson<MarketStats>("/api/stats");
+}
+
+/** Market-wide per-run history, newest first. `before` pages older runs. */
+export async function getRunHistory(before?: string): Promise<HistoryResponse> {
+  const query = before ? `?before=${encodeURIComponent(before)}` : "";
+  return getJson<HistoryResponse>(`/api/history${query}`);
 }
 
 export async function createAgent(

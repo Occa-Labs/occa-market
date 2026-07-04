@@ -9,7 +9,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Hammer, LayoutGrid, LayoutPanelLeft } from "lucide-react";
+import { Hammer, History, LayoutGrid, LayoutPanelLeft } from "lucide-react";
 import type { ComponentType } from "react";
 import { AuthButton } from "@/components/auth/auth-button";
 
@@ -45,6 +45,12 @@ export function SiteHeader() {
               icon={LayoutGrid}
               href="/"
               active={pathname === "/" || pathname.startsWith("/agents")}
+            />
+            <SubNavItem
+              label="History"
+              icon={History}
+              href="/history"
+              active={pathname.startsWith("/history")}
             />
           </div>
 

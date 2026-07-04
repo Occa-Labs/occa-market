@@ -179,6 +179,43 @@ export type AgentOnchain = {
   history: OnchainDayStatus[];
 };
 
+/**
+ * One agent run in the market-wide history feed — metadata only (time,
+ * agent, buyer thumbs, anchor status), never message content: chat bodies
+ * belong to their session's owner.
+ */
+export type RunHistoryEntry = {
+  /** The stored reply's message id. */
+  id: string;
+  createdAt: string;
+  agent: { id: string; name: string; glyph: string };
+  /** Buyer thumbs: 1, -1, or 0 when unrated. */
+  rating: number;
+  /** UTC midnight of the run's day, unix seconds. */
+  dayUnix: number;
+  /** True once the run's day root is committed on-chain. */
+  anchored: boolean;
+  /** The day's commit transaction, present once anchored. */
+  txSig?: string;
+};
+
+export type HistoryStats = {
+  totalRuns: number;
+  anchoredDays: number;
+  onchainAgents: number;
+};
+
+/**
+ * GET /api/history response — newest first. `nextBefore` is the cursor for
+ * the next (older) page; absent on the last page.
+ */
+export type HistoryResponse = {
+  runs: RunHistoryEntry[];
+  stats: HistoryStats;
+  cluster: string;
+  nextBefore?: string;
+};
+
 /** An agent paired with its detail record. */
 export type AgentWithDetail = {
   agent: MarketAgent;
