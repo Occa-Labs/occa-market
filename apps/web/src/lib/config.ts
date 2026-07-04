@@ -7,6 +7,13 @@ const welcomeCredit = Number(process.env.NEXT_PUBLIC_WELCOME_CREDIT);
 
 const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? "";
 
+// Dev/admin wallets that bypass the chat credit gate (CSV). Client-side
+// display logic only — the real enforcement moves server-side with the ledger.
+const devWallets = (process.env.NEXT_PUBLIC_DEV_WALLETS ?? "")
+  .split(",")
+  .map((w) => w.trim())
+  .filter(Boolean);
+
 export const config = {
   /** Base URL of the API server (apps/server). */
   apiBaseUrl: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000",
@@ -16,4 +23,6 @@ export const config = {
   privyAppId,
   /** Whether Privy sign-in is configured. */
   privyEnabled: privyAppId.length > 0,
+  /** Wallets exempt from the credit gate (dev/admin). */
+  devWallets,
 } as const;

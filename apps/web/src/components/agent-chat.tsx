@@ -9,6 +9,7 @@ import { SampleOutput } from "@/components/sample-output";
 import type { MarketAgent, OutputBlock } from "@occa-market/shared";
 import { sendMessage } from "@/lib/api";
 import { config } from "@/lib/config";
+import { useAuth } from "@/components/auth/auth-provider";
 
 type Message =
   | { role: "user"; text: string }
@@ -38,7 +39,13 @@ export function AgentChat({
   const [credit, setCredit] = useState(config.welcomeCredit);
   const [sending, setSending] = useState(false);
 
-  const broke = credit < price;
+  // Dev/admin wallets ride free — no metering, no top-up gate. Client-side
+  // courtesy only; the server-side ledger will enforce the same allowlist.
+  const { user } = useAuth();
+  const unmetered =
+    !!user?.walletAddress && config.devWallets.includes(user.walletAddress);
+
+  const broke = !unmetered && credit < price;
 
   async function send(text: string) {
     const trimmed = text.trim();
@@ -72,9 +79,11 @@ export function AgentChat({
 
       if (data.ok) {
         setMessages((prev) => [...prev, { role: "agent", blocks: data.blocks }]);
-        setCredit((c) =>
-          Math.max(0, +(c - (data.usage?.costUsd ?? price)).toFixed(2)),
-        );
+        if (!unmetered) {
+          setCredit((c) =>
+            Math.max(0, +(c - (data.usage?.costUsd ?? price)).toFixed(2)),
+          );
+        }
       } else {
         setMessages((prev) => [
           ...prev,
@@ -120,7 +129,7 @@ export function AgentChat({
             broke ? "border-warn/30 text-warn" : "border-line text-muted"
           }`}
         >
-          ${credit.toFixed(2)} credit
+          {unmetered ? "dev · unmetered" : `$${credit.toFixed(2)} credit`}
         </span>
       </div>
 
