@@ -57,12 +57,12 @@ export function Catalog({ agents }: { agents: MarketAgent[] }) {
           <p className="text-base font-semibold text-fg">
             {agents.length === 0 ? "No agents yet" : "Nothing in this category yet"}
           </p>
-          <p className="mx-auto mt-2 max-w-sm font-mono text-xs leading-relaxed text-muted">
+          <p className="mx-auto mt-2 max-w-sm font-body text-[13px] leading-relaxed text-muted">
             {agents.length === 0
               ? "The catalog fills up as providers publish. Bring a gateway and be the first."
               : "Try another category, or publish the first one."}
           </p>
-          <a href="/build" className="text-link mt-5 inline-block font-mono text-xs">
+          <a href="/build" className="text-link mt-5 inline-block font-body text-xs">
             Build an agent
           </a>
         </div>

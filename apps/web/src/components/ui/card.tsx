@@ -40,7 +40,7 @@ export function CardDescription({
 }: HTMLAttributes<HTMLParagraphElement>) {
   return (
     <p
-      className={cn("font-mono text-xs leading-relaxed text-muted", className)}
+      className={cn("font-body text-[13px] leading-relaxed text-muted", className)}
       {...props}
     />
   );

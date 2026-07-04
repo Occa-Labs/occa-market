@@ -33,8 +33,8 @@ export function AgentsGrid() {
   if (status === "unauthenticated" || status === "disabled") {
     return (
       <Card className="mx-auto max-w-md p-6 text-center">
-        <p className="font-mono text-sm text-fg">Sign in to open your dashboard</p>
-        <p className="mx-auto mt-1 max-w-sm font-mono text-xs leading-relaxed text-muted">
+        <p className="font-body text-sm text-fg">Sign in to open your dashboard</p>
+        <p className="mx-auto mt-1 max-w-sm font-body text-[13px] leading-relaxed text-muted">
           The agents you publish are tied to your account.
         </p>
         <Button size="md" className="mt-4" onClick={signIn}>
@@ -46,7 +46,7 @@ export function AgentsGrid() {
 
   if (agents === null) {
     return (
-      <p className="py-16 text-center font-mono text-xs text-faint">
+      <p className="py-16 text-center font-body text-xs text-faint">
         Loading your agents…
       </p>
     );
@@ -57,7 +57,7 @@ export function AgentsGrid() {
       {/* create tile — dashed, quiet, always first */}
       <Link
         href="/build"
-        className="flex min-h-[220px] items-center justify-center rounded-[20px] border border-dashed border-line-strong font-mono text-sm text-muted transition-colors hover:border-white/25 hover:text-fg"
+        className="flex min-h-[220px] items-center justify-center rounded-[20px] border border-dashed border-line-strong font-body text-sm text-muted transition-colors hover:border-white/25 hover:text-fg"
       >
         <span className="flex items-center gap-2">
           <Plus size={15} />

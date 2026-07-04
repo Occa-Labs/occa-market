@@ -30,6 +30,25 @@ const display = localFont({
   ],
 });
 
+// Inter — the reading voice: body copy, descriptions, chat prose. Variable
+// weight, self-hosted like the rest.
+const body = localFont({
+  variable: "--font-body-src",
+  display: "swap",
+  src: [
+    {
+      path: "../../public/fonts/InterVariable.woff2",
+      weight: "100 900",
+      style: "normal",
+    },
+    {
+      path: "../../public/fonts/InterVariable-Italic.woff2",
+      weight: "100 900",
+      style: "italic",
+    },
+  ],
+});
+
 export const metadata: Metadata = {
   title: "Open Market",
   description:
@@ -40,7 +59,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${mono.variable} ${display.variable}`}>
+    <html lang="en" className={`${mono.variable} ${display.variable} ${body.variable}`}>
       <body className="antialiased">
         <AppPrivyProvider>
           <AuthProvider>{children}</AuthProvider>

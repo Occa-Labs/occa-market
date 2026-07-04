@@ -61,7 +61,7 @@ function AccountPill({
               {walletAddress}
             </p>
             {email && (
-              <p className="mt-2 font-mono text-xs text-faint">
+              <p className="mt-2 font-body text-xs text-faint">
                 Signed in as <span className="text-muted">{maskEmail(email)}</span>
               </p>
             )}

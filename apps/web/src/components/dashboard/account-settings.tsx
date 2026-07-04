@@ -20,7 +20,7 @@ export function AccountSettings() {
   if (status === "unauthenticated" || status === "disabled") {
     return (
       <Card className="mx-auto max-w-md p-6 text-center">
-        <p className="font-mono text-sm text-fg">Sign in to see your account</p>
+        <p className="font-body text-sm text-fg">Sign in to see your account</p>
         <Button size="md" className="mt-4" onClick={signIn}>
           Sign in
         </Button>
@@ -30,7 +30,7 @@ export function AccountSettings() {
 
   if (!user) {
     return (
-      <p className="py-16 text-center font-mono text-xs text-faint">
+      <p className="py-16 text-center font-body text-xs text-faint">
         Loading your account…
       </p>
     );
@@ -64,7 +64,7 @@ export function AccountSettings() {
 
         <div className="mt-5">
           <p className="eyebrow mb-2">Solana wallet</p>
-          <p className="mb-1 font-mono text-xs leading-relaxed text-muted">
+          <p className="mb-1 font-body text-[13px] leading-relaxed text-muted">
             Your identity on the market — payments and published agents hang
             off this address.
           </p>
@@ -88,7 +88,7 @@ export function AccountSettings() {
 
       <Card className="p-6">
         <h2 className="text-base font-semibold text-fg">Credit</h2>
-        <p className="mt-1 font-mono text-xs leading-relaxed text-muted">
+        <p className="mt-1 font-body text-[13px] leading-relaxed text-muted">
           Chat is metered per message in USDC.
         </p>
         <p className="mt-4 font-mono text-sm text-fg">

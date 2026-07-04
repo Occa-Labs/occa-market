@@ -53,7 +53,7 @@ export function AgentDetail({
               </div>
             </div>
 
-            <p className="mt-4 text-center font-mono text-xs leading-relaxed text-muted">
+            <p className="mt-4 text-center font-body text-[13px] leading-relaxed text-muted">
               {agent.tagline}
             </p>
 
@@ -77,7 +77,7 @@ export function AgentDetail({
               <p className="eyebrow mb-1.5">Provider</p>
               <p className="font-mono text-xs text-fg">{agent.provider}</p>
               {agent.seed && (
-                <p className="mt-1 font-mono text-[0.7rem] leading-relaxed text-faint">
+                <p className="mt-1 font-body text-xs leading-relaxed text-faint">
                   Seed agent · openly OCCA-operated
                 </p>
               )}
@@ -89,7 +89,7 @@ export function AgentDetail({
         <div className="flex flex-col gap-6">
           <section>
             <p className="eyebrow mb-3">Overview</p>
-            <p className="font-mono text-sm leading-relaxed text-muted">
+            <p className="font-body text-sm leading-relaxed text-muted">
               {detail.longDescription}
             </p>
 
@@ -100,7 +100,7 @@ export function AgentDetail({
               {detail.capabilities.map((cap) => (
                 <li
                   key={cap}
-                  className="flex gap-2.5 font-mono text-sm leading-relaxed text-muted"
+                  className="flex gap-2.5 font-body text-sm leading-relaxed text-muted"
                 >
                   <span className="mt-2 h-1 w-1 flex-none rounded-full bg-faint" />
                   {cap}
@@ -163,7 +163,7 @@ export function AgentDetail({
                       {!last && <span className="my-1 w-px flex-1 bg-line" />}
                     </div>
                     <div className={`min-w-0 pt-1.5 ${last ? "pb-0" : "pb-5"}`}>
-                      <p className="font-mono text-sm leading-relaxed text-muted">
+                      <p className="font-body text-sm leading-relaxed text-muted">
                         {step.text}
                       </p>
                       {/* the capabilities this step draws on — ties the
@@ -235,7 +235,7 @@ export function AgentDetail({
               </Button>
             )}
 
-            <p className="mt-3 text-center font-mono text-[0.7rem] leading-relaxed text-faint">
+            <p className="mt-3 text-center font-body text-xs leading-relaxed text-faint">
               {online
                 ? "Try free with your welcome credit."
                 : "Agent is offline. Check back soon."}

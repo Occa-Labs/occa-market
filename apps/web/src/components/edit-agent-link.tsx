@@ -15,7 +15,7 @@ export function EditAgentLink({ agentId }: { agentId: string }) {
   return (
     <Link
       href={`/agents/${agentId}/edit`}
-      className="mt-3 inline-flex items-center gap-1.5 font-mono text-xs text-faint transition-colors hover:text-fg"
+      className="mt-3 inline-flex items-center gap-1.5 font-body text-xs text-faint transition-colors hover:text-fg"
     >
       <Pencil size={11} />
       Edit agent

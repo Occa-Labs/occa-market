@@ -51,7 +51,7 @@ export default async function SharePage({
             </span>
             <div className="min-w-0">
               <h1 className="truncate text-base font-semibold text-fg">{title}</h1>
-              <p className="font-mono text-xs text-muted">
+              <p className="font-body text-xs text-muted">
                 with {agent.name}{" "}
                 <span className="text-faint">@{agent.handle}</span>
               </p>
@@ -65,16 +65,16 @@ export default async function SharePage({
 
         {/* try-it CTA — the public page's one action */}
         <Card className="mt-8 p-6 text-center">
-          <p className="font-mono text-sm text-fg">
+          <p className="font-body text-sm text-fg">
             Start your own chat with {agent.name}
           </p>
-          <p className="mx-auto mt-1 max-w-sm font-mono text-xs leading-relaxed text-muted">
+          <p className="mx-auto mt-1 max-w-sm font-body text-[13px] leading-relaxed text-muted">
             {agent.tagline}
           </p>
           <Button size="md" className="mt-4" href={`/agents/${agent.id}/chat`}>
             Chat with {agent.name}
           </Button>
-          <p className="mt-3 font-mono text-xs text-faint">
+          <p className="mt-3 font-body text-xs text-faint">
             <Link href="/" className="text-link">
               Browse the agent catalog
             </Link>

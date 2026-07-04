@@ -289,7 +289,7 @@ export function AgentChat({
                     <button
                       type="button"
                       onClick={() => void openSession(s.id)}
-                      className={`min-w-0 flex-1 cursor-pointer truncate text-left font-mono text-xs ${
+                      className={`min-w-0 flex-1 cursor-pointer truncate text-left font-body text-xs ${
                         s.id === activeId ? "text-fg" : "text-muted"
                       }`}
                     >
@@ -306,7 +306,7 @@ export function AgentChat({
                   </div>
                 ))}
                 {sessions.length === 0 && (
-                  <p className="px-2.5 py-2 font-mono text-xs text-faint">
+                  <p className="px-2.5 py-2 font-body text-xs text-faint">
                     No sessions yet.
                   </p>
                 )}
@@ -332,7 +332,7 @@ export function AgentChat({
                   key={s.id}
                   type="button"
                   onClick={() => void openSession(s.id)}
-                  className={`flex-none cursor-pointer rounded-full border px-3 py-1 font-mono text-xs transition-colors ${
+                  className={`flex-none cursor-pointer rounded-full border px-3 py-1 font-body text-xs transition-colors ${
                     s.id === activeId
                       ? "border-line-strong bg-surface-2 text-fg"
                       : "border-line text-muted hover:text-fg"
@@ -351,7 +351,7 @@ export function AgentChat({
                 <span className="spotlight flex h-12 w-12 items-center justify-center rounded-2xl border border-line text-xl text-fg">
                   {agent.glyph}
                 </span>
-                <p className="max-w-sm font-mono text-xs leading-relaxed text-faint">
+                <p className="max-w-sm font-body text-[13px] leading-relaxed text-faint">
                   {agent.tagline}
                 </p>
               </div>
@@ -375,8 +375,8 @@ export function AgentChat({
           <div className="sticky bottom-4 mt-6">
             {signedOut ? (
               <Card className="p-5 text-center">
-                <p className="font-mono text-sm text-fg">Sign in to chat</p>
-                <p className="mx-auto mt-1 max-w-sm font-mono text-xs leading-relaxed text-muted">
+                <p className="font-body text-sm text-fg">Sign in to chat</p>
+                <p className="mx-auto mt-1 max-w-sm font-body text-[13px] leading-relaxed text-muted">
                   Your conversations with {agent.name} are saved to your
                   account, so you can pick them up anytime.
                 </p>
@@ -386,8 +386,8 @@ export function AgentChat({
               </Card>
             ) : broke ? (
               <Card className="p-5 text-center">
-                <p className="font-mono text-sm text-fg">Out of free credit</p>
-                <p className="mx-auto mt-1 max-w-sm font-mono text-xs leading-relaxed text-muted">
+                <p className="font-body text-sm text-fg">Out of free credit</p>
+                <p className="mx-auto mt-1 max-w-sm font-body text-[13px] leading-relaxed text-muted">
                   Your welcome credit is used up. Top up with USDC to keep
                   using {agent.name}.
                 </p>
@@ -404,7 +404,7 @@ export function AgentChat({
                       type="button"
                       disabled={sending}
                       onClick={() => send(prompt)}
-                      className="cursor-pointer rounded-full border border-line bg-surface-2 px-3 py-1 font-mono text-xs text-muted transition-colors hover:border-line-strong hover:text-fg disabled:opacity-50"
+                      className="cursor-pointer rounded-full border border-line bg-surface-2 px-3 py-1 font-body text-xs text-muted transition-colors hover:border-line-strong hover:text-fg disabled:opacity-50"
                     >
                       {prompt}
                     </button>
@@ -422,7 +422,7 @@ export function AgentChat({
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder={`Ask ${agent.name}…`}
-                    className="h-10 flex-1 rounded-xl border border-line bg-surface-2 px-3.5 font-mono text-sm text-fg placeholder:text-faint focus:border-line-strong focus:outline-none"
+                    className="h-10 flex-1 rounded-xl border border-line bg-surface-2 px-3.5 font-body text-sm text-fg placeholder:text-faint focus:border-line-strong focus:outline-none"
                   />
                   <Button
                     size="lg"
@@ -513,7 +513,7 @@ function RunError({
       <div className="flex items-start gap-2.5">
         <TriangleAlert size={14} className="mt-0.5 flex-none text-warn" />
         <div className="min-w-0 flex-1">
-          <p className="font-mono text-sm leading-relaxed text-fg">
+          <p className="font-body text-sm leading-relaxed text-fg">
             {message.human}
           </p>
           <p className="mt-1.5 select-all break-all font-mono text-xs leading-relaxed text-faint">
@@ -524,7 +524,7 @@ function RunError({
             type="button"
             disabled={disabled}
             onClick={onRetry}
-            className="mt-3 inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 font-mono text-xs text-muted transition-colors hover:border-line-strong hover:text-fg disabled:opacity-50"
+            className="mt-3 inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 font-body text-xs text-muted transition-colors hover:border-line-strong hover:text-fg disabled:opacity-50"
           >
             <RotateCcw size={11} />
             Retry

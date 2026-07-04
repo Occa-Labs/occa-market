@@ -261,8 +261,8 @@ export function AgentBuilder({ editId }: { editId?: string } = {}) {
   if (loadError) {
     return (
       <div className="mx-auto max-w-md px-5 py-20 text-center sm:px-6">
-        <p className="font-mono text-sm text-fg">Can&apos;t edit this agent</p>
-        <p className="mx-auto mt-2 max-w-sm font-mono text-xs leading-relaxed text-muted">
+        <p className="font-body text-sm text-fg">Can&apos;t edit this agent</p>
+        <p className="mx-auto mt-2 max-w-sm font-body text-[13px] leading-relaxed text-muted">
           {loadError}
         </p>
       </div>
@@ -272,7 +272,7 @@ export function AgentBuilder({ editId }: { editId?: string } = {}) {
   if (editing && !hydrated) {
     return (
       <div className="mx-auto max-w-md px-5 py-20 text-center">
-        <p className="font-mono text-xs text-faint">Loading agent…</p>
+        <p className="font-body text-xs text-faint">Loading agent…</p>
       </div>
     );
   }
@@ -283,7 +283,7 @@ export function AgentBuilder({ editId }: { editId?: string } = {}) {
       <h1 className="text-2xl font-semibold tracking-tight text-fg">
         {editing ? `Edit ${draft.name || "agent"}` : "Build your agent"}
       </h1>
-      <p className="mt-2 max-w-xl font-mono text-xs leading-relaxed text-muted">
+      <p className="mt-2 max-w-xl font-body text-[13px] leading-relaxed text-muted">
         {editing
           ? "Revise the agent's workspace — persona, skills, tools, workflow. Saving re-seeds it on your gateway; the handle stays fixed."
           : "Configure the agent and the gateway that powers it. A gateway runs on your own host and can power several of your agents — they share its uptime."}
@@ -617,7 +617,7 @@ function GatewayStep({ draft, update }: { draft: DraftAgent; update: Update }) {
                   )}
                 </span>
               </div>
-              <p className="mt-1 font-mono text-[0.7rem] leading-relaxed text-muted">
+              <p className="mt-1 font-body text-xs leading-relaxed text-muted">
                 {a.blurb}
               </p>
             </button>
@@ -695,7 +695,7 @@ function GatewayStep({ draft, update }: { draft: DraftAgent; update: Update }) {
         )}
       </div>
 
-      <p className="mt-5 rounded-xl border border-line bg-surface-2 px-3.5 py-3 font-mono text-[0.7rem] leading-relaxed text-faint">
+      <p className="mt-5 rounded-xl border border-line bg-surface-2 px-3.5 py-3 font-body text-xs leading-relaxed text-faint">
         One gateway can host several of your own agents, each in its own isolated
         workspace. No cross-provider pooling: an agent only ever runs on your
         gateway, and if it goes down every agent on it shows offline until it is back.
@@ -829,7 +829,7 @@ function SkillsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
       {/* added skills */}
       <div className="flex flex-col gap-2">
         {draft.skills.length === 0 && (
-          <p className="font-mono text-xs text-faint">No skills yet.</p>
+          <p className="font-body text-xs text-faint">No skills yet.</p>
         )}
         {draft.skills.map((s) => (
           <div
@@ -839,7 +839,7 @@ function SkillsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
             <div className="min-w-0">
               <p className="font-mono text-sm text-fg">{s.name}</p>
               {s.description && (
-                <p className="mt-0.5 truncate font-mono text-xs text-muted">
+                <p className="mt-0.5 truncate font-body text-xs text-muted">
                   {s.description}
                 </p>
               )}
@@ -878,7 +878,7 @@ function SkillsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
                 type="button"
                 onClick={() => setMode(m)}
                 aria-pressed={on}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 font-mono text-xs transition-all ${
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 font-body text-xs transition-all ${
                   on
                     ? "bg-surface-2 text-fg shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_1px_2px_rgba(0,0,0,0.4)]"
                     : "text-muted hover:text-fg"
@@ -932,12 +932,12 @@ function SkillsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
                 }
               }}
             />
-            <p className="mt-1.5 font-mono text-[0.7rem] leading-relaxed text-faint">
+            <p className="mt-1.5 font-body text-xs leading-relaxed text-faint">
               Points at a folder with a SKILL.md. Reads its name, description, and
               instructions from the pinned commit.
             </p>
             {importError && (
-              <p className="mt-2 font-mono text-xs text-bad">{importError}</p>
+              <p className="mt-2 font-body text-xs text-bad">{importError}</p>
             )}
             <div className="mt-2 flex justify-end">
               <Button
@@ -1000,7 +1000,7 @@ function ToolsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
       {/* added tools */}
       <div className="flex flex-col gap-2">
         {draft.tools.length === 0 && (
-          <p className="font-mono text-xs text-faint">No tools yet.</p>
+          <p className="font-body text-xs text-faint">No tools yet.</p>
         )}
         {draft.tools.map((t) => (
           <div
@@ -1009,7 +1009,7 @@ function ToolsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
           >
             <div className="min-w-0">
               <p className="font-mono text-sm text-fg">{t.name}</p>
-              <p className="mt-0.5 truncate font-mono text-xs text-muted">
+              <p className="mt-0.5 truncate font-body text-xs text-muted">
                 {describeTool(t.config)}
               </p>
             </div>
@@ -1051,11 +1051,11 @@ function ToolsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
             setError(null);
           }}
         />
-        <p className="mt-1.5 font-mono text-[0.7rem] leading-relaxed text-faint">
+        <p className="mt-1.5 font-body text-xs leading-relaxed text-faint">
           Runs on your gateway host, so anything it needs (binaries, env keys)
           lives there. Configs are internal — never shown in the catalog.
         </p>
-        {error && <p className="mt-2 font-mono text-xs text-bad">{error}</p>}
+        {error && <p className="mt-2 font-body text-xs text-bad">{error}</p>}
         <div className="mt-2 flex justify-end">
           <Button
             variant="secondary"
@@ -1142,7 +1142,7 @@ function WorkflowStep({ draft, update }: { draft: DraftAgent; update: Update }) 
     >
       <ol className="flex flex-col">
         {draft.workflow.length === 0 && (
-          <p className="font-mono text-xs text-faint">No steps yet.</p>
+          <p className="font-body text-xs text-faint">No steps yet.</p>
         )}
         {draft.workflow.map((s, i) => {
           const lastStep = i === draft.workflow.length - 1;
@@ -1161,7 +1161,7 @@ function WorkflowStep({ draft, update }: { draft: DraftAgent; update: Update }) 
                 }`}
               >
                 <div className="min-w-0">
-                  <p className="font-mono text-sm leading-relaxed text-muted">
+                  <p className="font-body text-sm leading-relaxed text-muted">
                     {s.text}
                   </p>
                   {validUses.length > 0 && (
@@ -1242,7 +1242,7 @@ function WorkflowStep({ draft, update }: { draft: DraftAgent; update: Update }) 
             Uses
           </span>
           {capabilities.length === 0 ? (
-            <span className="font-mono text-xs text-faint">
+            <span className="font-body text-xs text-faint">
               add skills or tools first to tag what a step draws on
             </span>
           ) : (
@@ -1364,12 +1364,12 @@ function ReviewStep({
       </div>
 
       {!canPublish && (
-        <p className="mt-5 font-mono text-xs text-warn">
+        <p className="mt-5 font-body text-xs text-warn">
           Still needed before publishing: {missing.join(", ")}.
         </p>
       )}
 
-      {error && <p className="mt-5 font-mono text-xs text-bad">{error}</p>}
+      {error && <p className="mt-5 font-body text-xs text-bad">{error}</p>}
     </StepShell>
   );
 }
@@ -1415,7 +1415,7 @@ function PreviewCard({ preview }: { preview: ReturnType<typeof draftToPreview> }
       </div>
       <p className="mt-4 text-base font-semibold text-fg">{preview.name}</p>
       <p className="mt-0.5 font-mono text-xs text-faint">@{preview.handle}</p>
-      <p className="mt-2 flex-1 font-mono text-xs leading-relaxed text-muted">
+      <p className="mt-2 flex-1 font-body text-xs leading-relaxed text-muted">
         {preview.tagline}
       </p>
       <div className="mt-4 flex items-center justify-between border-t border-line pt-4 font-mono text-xs">
@@ -1452,14 +1452,14 @@ function Published({
       <h1 className="mt-5 text-xl font-semibold tracking-tight text-fg">
         {editedId ? "Changes saved" : "Agent submitted"}
       </h1>
-      <p className="mx-auto mt-2 max-w-sm font-mono text-xs leading-relaxed text-muted">
+      <p className="mx-auto mt-2 max-w-sm font-body text-[13px] leading-relaxed text-muted">
         {editedId
           ? `${draft.name || "The agent"} has been updated in the catalog.`
           : `${draft.name || "Your agent"} is queued for the catalog. Public publishing opens after review.`}
       </p>
       {seedResult && (
         <p
-          className={`mx-auto mt-3 max-w-sm font-mono text-xs leading-relaxed ${
+          className={`mx-auto mt-3 max-w-sm font-body text-[13px] leading-relaxed ${
             seedResult.seeded ? "text-muted" : "text-warn"
           }`}
         >
@@ -1509,7 +1509,7 @@ function StepShell({
   return (
     <div>
       <h2 className="text-lg font-semibold tracking-tight text-fg">{title}</h2>
-      <p className="mt-1 max-w-lg font-mono text-xs leading-relaxed text-muted">
+      <p className="mt-1 max-w-lg font-body text-[13px] leading-relaxed text-muted">
         {hint}
       </p>
       <div className="mt-6">{children}</div>
@@ -1531,7 +1531,7 @@ function Field({
       <span className="eyebrow mb-2 block">{label}</span>
       {children}
       {hint && (
-        <span className="mt-1 block font-mono text-[0.7rem] text-faint">
+        <span className="mt-1 block font-body text-xs text-faint">
           {hint}
         </span>
       )}
@@ -1596,7 +1596,7 @@ function TextInput({
   return (
     <input
       className={cn(
-        "h-10 w-full rounded-xl border border-line bg-surface-2 px-3.5 font-mono text-sm text-fg placeholder:text-faint focus:border-line-strong focus:outline-none",
+        "h-10 w-full rounded-xl border border-line bg-surface-2 px-3.5 font-body text-sm text-fg placeholder:text-faint focus:border-line-strong focus:outline-none",
         className,
       )}
       {...props}
@@ -1611,7 +1611,7 @@ function TextArea({
   return (
     <textarea
       className={cn(
-        "w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 font-mono text-sm leading-relaxed text-fg placeholder:text-faint focus:border-line-strong focus:outline-none",
+        "w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 font-body text-sm leading-relaxed text-fg placeholder:text-faint focus:border-line-strong focus:outline-none",
         className,
       )}
       {...props}

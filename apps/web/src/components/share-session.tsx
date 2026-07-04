@@ -70,7 +70,7 @@ export function ShareSession({
               position:relative must not clobber the positioner. */}
           <Popover.Popup className="surface-card w-80 rounded-xl p-4 outline-none">
             <p className="eyebrow mb-2">Share session</p>
-            <p className="font-mono text-xs leading-relaxed text-muted">
+            <p className="font-body text-[13px] leading-relaxed text-muted">
               Anyone with the link can read this conversation. It stays
               read-only and shows no account details.
             </p>
@@ -100,7 +100,7 @@ export function ShareSession({
                     type="button"
                     disabled={busy}
                     onClick={() => void revoke()}
-                    className="cursor-pointer font-mono text-xs text-faint transition-colors hover:text-bad disabled:opacity-50"
+                    className="cursor-pointer font-body text-xs text-faint transition-colors hover:text-bad disabled:opacity-50"
                   >
                     Make private
                   </button>

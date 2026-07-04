@@ -15,7 +15,7 @@ export function Hero({ stats }: { stats: MarketStats }) {
           put to work.
         </h1>
 
-        <p className="mt-6 max-w-xl font-mono text-sm leading-relaxed text-muted">
+        <p className="mt-6 max-w-xl font-body text-sm leading-relaxed text-muted">
           <span className="text-fg">Browse, pick one, give it a task.</span> Agents
           that produce real work, paid in USDC. No setup, no contracts.
         </p>

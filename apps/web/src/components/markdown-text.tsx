@@ -10,7 +10,7 @@ import remarkGfm from "remark-gfm";
 
 export function MarkdownText({ text }: { text: string }) {
   return (
-    <div className="chat-md font-mono text-sm leading-relaxed text-muted">
+    <div className="chat-md font-body text-sm leading-relaxed text-muted">
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
     </div>
   );
