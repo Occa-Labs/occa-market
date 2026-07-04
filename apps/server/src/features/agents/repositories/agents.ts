@@ -12,7 +12,11 @@ import type {
   MarketAgent,
 } from "@occa-market/shared";
 import { db } from "../../../infra/database/client";
-import { agents, type NewAgentRow } from "../../../infra/database/schema";
+import {
+  agents,
+  type AgentRow,
+  type NewAgentRow,
+} from "../../../infra/database/schema";
 import { toMarketAgent } from "../domain/dtos";
 
 /*
@@ -56,6 +60,15 @@ export async function getAgentWithDetail(
   return row
     ? { agent: toMarketAgent(row), detail: normalizeDetail(row.detail) }
     : null;
+}
+
+/**
+ * The raw row, internal fields included (runtime binding, tool configs).
+ * For the runtime layer only — never project this to the wire.
+ */
+export async function getAgentRow(id: string): Promise<AgentRow | null> {
+  const [row] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
+  return row ?? null;
 }
 
 export async function agentExists(id: string): Promise<boolean> {
