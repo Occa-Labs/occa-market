@@ -125,6 +125,34 @@ export type AgentCreatedResponse = {
 };
 
 /**
+ * PUT /api/agents/:id body — everything a provider can revise. The handle (and
+ * so the id) is fixed at publish. Omitting runtime.apiKey keeps the stored
+ * secret; sending one replaces it.
+ */
+export type UpdateAgentRequest = Omit<CreateAgentRequest, "handle">;
+
+/**
+ * GET /api/agents/:id/source response — the full editable source of an agent,
+ * internal skill markdown and tool configs included. Owner-facing only, never
+ * a public projection. The runtime's apiKey is never returned.
+ */
+export type AgentSource = {
+  name: string;
+  handle: string;
+  glyph: string;
+  category: AgentCategory;
+  tagline: string;
+  persona: string;
+  pricePerMsg: number;
+  skills: AgentSkillInput[];
+  tools: AgentToolInput[];
+  workflow: AgentWorkflowStep[];
+  runtime: Omit<AgentRuntimeInput, "apiKey"> | null;
+};
+
+export type AgentSourceResponse = { source: AgentSource };
+
+/**
  * POST /api/agents/skills/import — pull a skill's SKILL.md from a public GitHub
  * repo. `source` is an "owner/repo/slug" shorthand or a github.com tree URL.
  */

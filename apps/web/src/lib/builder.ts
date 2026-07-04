@@ -12,7 +12,7 @@
   Option libraries (adapters, tools, skills) live in ./builder-options.
 */
 
-import type { AgentCategory, MarketAgent } from "@occa-market/shared";
+import type { AgentCategory, AgentSource, MarketAgent } from "@occa-market/shared";
 import {
   ADAPTERS,
   type AdapterType,
@@ -63,6 +63,39 @@ export function emptyDraft(): DraftAgent {
     skills: [],
     tools: [],
     workflow: [],
+  };
+}
+
+/*
+  Prefill a draft from a published agent's source (the edit flow). The apiKey
+  is never returned by the server — blank means "keep the stored secret" — and
+  the connection probe starts over, since editing shouldn't assume the gateway
+  is still up.
+*/
+export function draftFromSource(source: AgentSource): DraftAgent {
+  return {
+    ...emptyDraft(),
+    name: source.name,
+    handle: source.handle,
+    glyph: source.glyph,
+    category: source.category,
+    tagline: source.tagline,
+    persona: source.persona,
+    pricePerMsg: source.pricePerMsg,
+    adapterType: (source.runtime?.adapterType as AdapterType) ?? "claude-code",
+    gatewayUrl: source.runtime?.gatewayUrl ?? "",
+    model: source.runtime?.model ?? ADAPTERS[0].defaultModel,
+    externalAgentId: source.runtime?.externalAgentId ?? "",
+    skills: source.skills.map((s) => ({
+      name: s.name,
+      description: s.description ?? "",
+      markdown: s.markdown ?? "",
+      source: s.source ?? "markdown",
+      repoUrl: s.repoUrl,
+      repoPath: s.repoPath,
+    })),
+    tools: source.tools.map((t) => ({ name: t.name, config: t.config ?? {} })),
+    workflow: source.workflow.map((w) => ({ text: w.text, uses: w.uses ?? [] })),
   };
 }
 

@@ -12,12 +12,12 @@ import type { AgentDetail, MarketAgent } from "@occa-market/shared";
 import type { NewAgentRow } from "../../../infra/database/schema";
 import { gatewaySeed } from "../../../infra/gateway/client";
 import { agentExists, insertAgent } from "../repositories/agents";
-import type { CreateAgentBody } from "../domain/schemas";
+import type { CreateAgentBody, UpdateAgentBody } from "../domain/schemas";
 import { buildSeedFiles } from "./runtime/seed";
 
 const DEFAULT_ACCENT = "#2ee6d6";
 
-type PublishResult =
+export type PublishResult =
   | { ok: true; agent: MarketAgent; seeded: boolean; seedReason?: string }
   | { ok: false; error: string };
 
@@ -29,7 +29,9 @@ function slugify(handle: string): string {
     .replace(/^-|-$/g, "");
 }
 
-function buildDetail(input: CreateAgentBody): AgentDetail {
+// The handle plays no part in the detail document, so revisions (which fix
+// the handle) share this builder with first publishes.
+export function buildDetail(input: UpdateAgentBody): AgentDetail {
   // The capability names a workflow step is allowed to reference.
   const declared = new Set([
     ...input.skills.map((s) => s.name),

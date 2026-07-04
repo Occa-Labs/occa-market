@@ -9,6 +9,8 @@ import type {
   AgentDetailResponse,
   AgentListResponse,
   AgentSkillInput,
+  AgentSource,
+  AgentSourceResponse,
   AuthResponse,
   AuthUser,
   ChatHistoryResponse,
@@ -24,6 +26,7 @@ import type {
   SendMessageResponse,
   SharedSessionResponse,
   ShareSessionResponse,
+  UpdateAgentRequest,
   SkillImportResponse,
 } from "@occa-market/shared";
 import { config } from "./config";
@@ -98,6 +101,43 @@ export async function createAgent(
   }
   const data = await res.json().catch(() => ({ error: "publish failed" }));
   return { ok: false, error: data.error ?? "publish failed" };
+}
+
+/** The editable source of an agent, for the edit wizard. Null when signed out or unknown. */
+export async function getAgentSource(id: string): Promise<AgentSource | null> {
+  const res = await fetch(`${base}/api/agents/${id}/source`, {
+    headers: authHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as AgentSourceResponse;
+  return data.source;
+}
+
+/** Revise a published agent; the server re-seeds its gateway workspace. */
+export async function updateAgent(
+  id: string,
+  body: UpdateAgentRequest,
+): Promise<
+  | { ok: true; agent: MarketAgent; seeded: boolean; seedReason?: string }
+  | { ok: false; error: string }
+> {
+  const res = await fetch(`${base}/api/agents/${id}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body),
+  });
+  if (res.ok) {
+    const data = (await res.json()) as AgentCreatedResponse;
+    return {
+      ok: true,
+      agent: data.agent,
+      seeded: data.seeded,
+      seedReason: data.seedReason,
+    };
+  }
+  const data = await res.json().catch(() => ({ error: "update failed" }));
+  return { ok: false, error: data.error ?? "update failed" };
 }
 
 /** Import a skill's SKILL.md from a public GitHub repo (owner/repo/slug or URL). */

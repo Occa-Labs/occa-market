@@ -18,9 +18,16 @@ import {
   X,
 } from "lucide-react";
 import { CATEGORIES, type AgentCategory } from "@occa-market/shared";
-import { createAgent, importSkill, testGateway } from "@/lib/api";
+import {
+  createAgent,
+  getAgentSource,
+  importSkill,
+  testGateway,
+  updateAgent,
+} from "@/lib/api";
 import {
   describeTool,
+  draftFromSource,
   draftToPreview,
   emptyDraft,
   handleFromName,
@@ -57,12 +64,16 @@ type PersistedDraft = { draft: DraftAgent; step: number };
 
 type Update = (patch: Partial<DraftAgent>) => void;
 
-export function AgentBuilder() {
+export function AgentBuilder({ editId }: { editId?: string } = {}) {
+  // Edit mode: the draft comes from (and returns to) the server, so all
+  // localStorage draft plumbing is bypassed — it belongs to new builds only.
+  const editing = Boolean(editId);
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<DraftAgent>(emptyDraft());
   const [published, setPublished] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   // Did the workspace land on the provider's gateway at publish time?
   const [seedResult, setSeedResult] = useState<{
     seeded: boolean;
@@ -75,9 +86,29 @@ export function AgentBuilder() {
   const update: Update = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const last = STEPS.length - 1;
 
+  // Edit mode hydrates from the server instead: fetch the agent's full
+  // editable source (skill markdown and tool configs included) and prefill.
+  useEffect(() => {
+    if (!editId) return;
+    let active = true;
+    void getAgentSource(editId).then((source) => {
+      if (!active) return;
+      if (!source) {
+        setLoadError("Couldn't load this agent — sign in and try again.");
+      } else {
+        setDraft(draftFromSource(source));
+      }
+      setHydrated(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [editId]);
+
   // Hydrate once from localStorage (client-only, so it can't cause an SSR
   // mismatch — the server and first client render both start from emptyDraft).
   useEffect(() => {
+    if (editId) return;
     try {
       const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
       if (raw) {
@@ -106,18 +137,19 @@ export function AgentBuilder() {
       /* corrupt or unavailable storage — start fresh */
     }
     setHydrated(true);
-  }, []);
+  }, [editId]);
 
   // Persist on every change once hydrated. Drop the API key from what we store.
+  // Edit drafts never touch localStorage — saving goes straight to the server.
   useEffect(() => {
-    if (!hydrated || published) return;
+    if (!hydrated || published || editing) return;
     try {
       const payload: PersistedDraft = { draft: { ...draft, apiKey: "" }, step };
       localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(payload));
     } catch {
       /* storage full or blocked — persistence is best-effort */
     }
-  }, [draft, step, hydrated, published]);
+  }, [draft, step, hydrated, published, editing]);
 
   // Adopt draft writes from OTHER /build tabs. Persistence is last-writer-wins,
   // so without this a stale tab silently clobbers work done here (that's how
@@ -126,6 +158,7 @@ export function AgentBuilder() {
   // materially changed re-renders nothing and breaks the write ping-pong
   // (each tab persists its own `step`, so payloads always differ across tabs).
   useEffect(() => {
+    if (editing) return;
     function onStorage(e: StorageEvent) {
       if (e.key !== DRAFT_STORAGE_KEY || !e.newValue) return;
       try {
@@ -154,20 +187,23 @@ export function AgentBuilder() {
     }
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  }, [editing]);
 
   const canPublish =
     draft.name.trim().length > 0 &&
     draft.tagline.trim().length > 0 &&
-    draft.connection === "ok";
+    // A first publish must prove the gateway; an edit keeps the stored binding
+    // (blank apiKey = keep secret) and only needs it present, not re-probed.
+    (editing
+      ? draft.gatewayUrl.trim().length > 0 && draft.externalAgentId.length > 0
+      : draft.connection === "ok");
 
   async function publish() {
     if (!canPublish || publishing) return;
     setPublishing(true);
     setError(null);
-    const res = await createAgent({
+    const payload = {
       name: draft.name,
-      handle: draft.handle,
       glyph: draft.glyph,
       category: draft.category,
       tagline: draft.tagline,
@@ -187,16 +223,21 @@ export function AgentBuilder() {
         model: draft.model,
         externalAgentId: draft.externalAgentId,
       },
-    });
+    };
+    const res = editId
+      ? await updateAgent(editId, payload)
+      : await createAgent({ ...payload, handle: draft.handle });
     setPublishing(false);
     if (res.ok) {
       setSeedResult({ seeded: res.seeded, reason: res.seedReason });
       setPublished(true);
       // draft is submitted — don't leave it lingering for the next build
-      try {
-        localStorage.removeItem(DRAFT_STORAGE_KEY);
-      } catch {
-        /* ignore */
+      if (!editing) {
+        try {
+          localStorage.removeItem(DRAFT_STORAGE_KEY);
+        } catch {
+          /* ignore */
+        }
       }
     } else setError(res.error);
   }
@@ -206,6 +247,7 @@ export function AgentBuilder() {
       <Published
         draft={draft}
         seedResult={seedResult}
+        editedId={editId}
         onReset={() => {
           setDraft(emptyDraft());
           setStep(0);
@@ -216,15 +258,35 @@ export function AgentBuilder() {
     );
   }
 
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-md px-5 py-20 text-center sm:px-6">
+        <p className="font-mono text-sm text-fg">Can&apos;t edit this agent</p>
+        <p className="mx-auto mt-2 max-w-sm font-mono text-xs leading-relaxed text-muted">
+          {loadError}
+        </p>
+      </div>
+    );
+  }
+
+  if (editing && !hydrated) {
+    return (
+      <div className="mx-auto max-w-md px-5 py-20 text-center">
+        <p className="font-mono text-xs text-faint">Loading agent…</p>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-5 py-10 sm:px-6">
       <p className="eyebrow mb-2">Provider</p>
       <h1 className="text-2xl font-semibold tracking-tight text-fg">
-        Build your agent
+        {editing ? `Edit ${draft.name || "agent"}` : "Build your agent"}
       </h1>
       <p className="mt-2 max-w-xl font-mono text-xs leading-relaxed text-muted">
-        Configure the agent and the gateway that powers it. A gateway runs on
-        your own host and can power several of your agents — they share its uptime.
+        {editing
+          ? "Revise the agent's workspace — persona, skills, tools, workflow. Saving re-seeds it on your gateway; the handle stays fixed."
+          : "Configure the agent and the gateway that powers it. A gateway runs on your own host and can power several of your agents — they share its uptime."}
       </p>
 
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[200px_1fr]">
@@ -234,7 +296,9 @@ export function AgentBuilder() {
             instead of forcing the whole layout wider. */}
         <div className="min-w-0">
           <div className="min-h-[360px]">
-            {step === 0 && <IdentityStep draft={draft} update={update} />}
+            {step === 0 && (
+              <IdentityStep draft={draft} update={update} lockHandle={editing} />
+            )}
             {step === 1 && <GatewayStep draft={draft} update={update} />}
             {step === 2 && <SkillsStep draft={draft} update={update} />}
             {step === 3 && <ToolsStep draft={draft} update={update} />}
@@ -272,7 +336,13 @@ export function AgentBuilder() {
                 disabled={!canPublish || publishing}
                 onClick={publish}
               >
-                {publishing ? "Publishing…" : "Publish agent"}
+                {publishing
+                  ? editing
+                    ? "Saving…"
+                    : "Publishing…"
+                  : editing
+                    ? "Save changes"
+                    : "Publish agent"}
               </Button>
             )}
           </div>
@@ -357,7 +427,15 @@ function Stepper({
 
 /* ── Step 1 · Identity ────────────────────────────────────────── */
 
-function IdentityStep({ draft, update }: { draft: DraftAgent; update: Update }) {
+function IdentityStep({
+  draft,
+  update,
+  lockHandle = false,
+}: {
+  draft: DraftAgent;
+  update: Update;
+  lockHandle?: boolean;
+}) {
   return (
     <StepShell
       title="Identity"
@@ -371,7 +449,8 @@ function IdentityStep({ draft, update }: { draft: DraftAgent; update: Update }) 
             onChange={(e) =>
               update({
                 name: e.target.value,
-                handle: handleFromName(e.target.value),
+                // the handle is the agent's id — fixed once published
+                ...(lockHandle ? {} : { handle: handleFromName(e.target.value) }),
               })
             }
           />
@@ -386,10 +465,12 @@ function IdentityStep({ draft, update }: { draft: DraftAgent; update: Update }) 
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Handle">
+        <Field label={lockHandle ? "Handle (fixed after publish)" : "Handle"}>
           <TextInput
             value={draft.handle}
             placeholder="degen_scout"
+            disabled={lockHandle}
+            className={lockHandle ? "opacity-60" : undefined}
             onChange={(e) => update({ handle: e.target.value })}
           />
         </Field>
@@ -1355,10 +1436,12 @@ function PreviewCard({ preview }: { preview: ReturnType<typeof draftToPreview> }
 function Published({
   draft,
   seedResult,
+  editedId,
   onReset,
 }: {
   draft: DraftAgent;
   seedResult: { seeded: boolean; reason?: string } | null;
+  editedId?: string;
   onReset: () => void;
 }) {
   return (
@@ -1367,11 +1450,12 @@ function Published({
         <Check size={22} />
       </div>
       <h1 className="mt-5 text-xl font-semibold tracking-tight text-fg">
-        Agent submitted
+        {editedId ? "Changes saved" : "Agent submitted"}
       </h1>
       <p className="mx-auto mt-2 max-w-sm font-mono text-xs leading-relaxed text-muted">
-        {draft.name || "Your agent"} is queued for the catalog. Public
-        publishing opens after review.
+        {editedId
+          ? `${draft.name || "The agent"} has been updated in the catalog.`
+          : `${draft.name || "Your agent"} is queued for the catalog. Public publishing opens after review.`}
       </p>
       {seedResult && (
         <p
@@ -1387,12 +1471,25 @@ function Published({
         </p>
       )}
       <div className="mt-6 flex justify-center gap-3">
-        <Button variant="secondary" size="md" href="/#catalog">
-          Back to catalog
-        </Button>
-        <Button size="md" onClick={onReset}>
-          Build another
-        </Button>
+        {editedId ? (
+          <>
+            <Button variant="secondary" size="md" href="/#catalog">
+              Back to catalog
+            </Button>
+            <Button size="md" href={`/agents/${editedId}`}>
+              View agent
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="secondary" size="md" href="/#catalog">
+              Back to catalog
+            </Button>
+            <Button size="md" onClick={onReset}>
+              Build another
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );

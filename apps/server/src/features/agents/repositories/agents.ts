@@ -84,3 +84,16 @@ export async function insertAgent(row: NewAgentRow): Promise<MarketAgent> {
   const [created] = await db.insert(agents).values(row).returning();
   return toMarketAgent(created);
 }
+
+/** Apply a revision to an existing agent; null when the id is unknown. */
+export async function updateAgentRow(
+  id: string,
+  patch: Partial<NewAgentRow>,
+): Promise<MarketAgent | null> {
+  const [updated] = await db
+    .update(agents)
+    .set(patch)
+    .where(eq(agents.id, id))
+    .returning();
+  return updated ? toMarketAgent(updated) : null;
+}

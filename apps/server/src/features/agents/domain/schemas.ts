@@ -80,3 +80,9 @@ export const createAgentBody = z.object({
 });
 
 export type CreateAgentBody = z.infer<typeof createAgentBody>;
+
+// Revision keeps the handle (it's the id); an omitted runtime apiKey means
+// "keep the stored secret".
+export const updateAgentBody = createAgentBody.omit({ handle: true });
+
+export type UpdateAgentBody = z.infer<typeof updateAgentBody>;

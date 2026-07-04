@@ -5,6 +5,7 @@ import { formatUses } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SampleOutput } from "@/components/sample-output";
+import { EditAgentLink } from "@/components/edit-agent-link";
 
 export function AgentDetail({
   agent,
@@ -239,6 +240,10 @@ export function AgentDetail({
                 ? "Try free with your welcome credit."
                 : "Agent is offline. Check back soon."}
             </p>
+
+            <div className="text-center">
+              <EditAgentLink agentId={agent.id} />
+            </div>
           </Card>
 
           <Card className="p-6">
