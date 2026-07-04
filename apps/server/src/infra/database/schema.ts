@@ -76,12 +76,12 @@ export type AgentRow = typeof agents.$inferSelect;
 export type NewAgentRow = typeof agents.$inferInsert;
 
 /*
-  Chat history — one row per message, one thread per (user, agent). User rows
-  carry `text`, agent rows carry the reply `blocks`. The client-side greeting
-  is never stored.
+  Chat sessions — one row per conversation. A user holds many sessions per
+  agent; the session is the thread (and the runtime continuity key). Titled
+  from the first user message; lastMessageAt drives the list order.
 */
-export const chatMessages = pgTable(
-  "chat_messages",
+export const chatSessions = pgTable(
+  "chat_sessions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     agentId: text("agent_id")
@@ -90,12 +90,35 @@ export const chatMessages = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("chat_sessions_owner_idx").on(t.agentId, t.userId, t.lastMessageAt)],
+);
+
+export type ChatSessionRow = typeof chatSessions.$inferSelect;
+
+/*
+  Chat history — one row per message, owned by a session. User rows carry
+  `text`, agent rows carry the reply `blocks`. The client-side greeting is
+  never stored.
+*/
+export const chatMessages = pgTable(
+  "chat_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => chatSessions.id, { onDelete: "cascade" }),
     role: text("role").$type<"user" | "agent">().notNull(),
     text: text("text"),
     blocks: jsonb("blocks").$type<OutputBlock[]>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("chat_messages_thread_idx").on(t.agentId, t.userId, t.createdAt)],
+  (t) => [index("chat_messages_session_idx").on(t.sessionId, t.createdAt)],
 );
 
 export type ChatMessageRow = typeof chatMessages.$inferSelect;

@@ -5,10 +5,11 @@
 
 import { z } from "zod";
 
-// Session key, turn, and history are all derived server-side (auth identity +
-// stored thread) — the client only ever sends the message text.
+// Turn and history are derived server-side from the stored session. Omitting
+// sessionId starts a fresh session, titled from the message.
 export const sendMessageBody = z.object({
   message: z.string().trim().min(1, "message is required"),
+  sessionId: z.string().uuid().optional(),
 });
 
 export type SendMessageBody = z.infer<typeof sendMessageBody>;

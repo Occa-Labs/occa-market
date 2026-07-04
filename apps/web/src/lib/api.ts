@@ -13,13 +13,15 @@ import type {
   AuthUser,
   ChatHistoryResponse,
   ChatMessage,
+  ChatSession,
+  ChatSessionListResponse,
   CreateAgentRequest,
   GatewayHealthRequest,
   GatewayHealthResponse,
   MarketAgent,
   MarketStats,
-  RuntimeResult,
   SendMessageRequest,
+  SendMessageResponse,
   SkillImportResponse,
 } from "@occa-market/shared";
 import { config } from "./config";
@@ -161,23 +163,49 @@ export async function fetchMe(): Promise<AuthUser | null> {
 export async function sendMessage(
   id: string,
   body: SendMessageRequest,
-): Promise<RuntimeResult> {
+): Promise<SendMessageResponse> {
   const res = await fetch(`${base}/api/agents/${id}/messages`, {
     method: "POST",
     headers: { "content-type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
   // The server returns { ok: false, error } with a 4xx on failure — still JSON.
-  return res.json() as Promise<RuntimeResult>;
+  return res.json() as Promise<SendMessageResponse>;
 }
 
-/** The caller's stored chat thread with an agent. Null when signed out. */
-export async function getChatHistory(id: string): Promise<ChatMessage[] | null> {
-  const res = await fetch(`${base}/api/agents/${id}/messages`, {
+/** The caller's sessions with an agent, most recently active first. Null when signed out. */
+export async function listChatSessions(id: string): Promise<ChatSession[] | null> {
+  const res = await fetch(`${base}/api/agents/${id}/sessions`, {
+    headers: authHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as ChatSessionListResponse;
+  return data.sessions;
+}
+
+/** One session's stored messages. Null when signed out or not the caller's. */
+export async function getSessionMessages(
+  id: string,
+  sessionId: string,
+): Promise<ChatMessage[] | null> {
+  const res = await fetch(`${base}/api/agents/${id}/sessions/${sessionId}/messages`, {
     headers: authHeaders(),
     cache: "no-store",
   });
   if (!res.ok) return null;
   const data = (await res.json()) as ChatHistoryResponse;
   return data.messages;
+}
+
+/** Drop a session and its messages. */
+export async function deleteChatSession(
+  id: string,
+  sessionId: string,
+): Promise<boolean> {
+  const res = await fetch(`${base}/api/agents/${id}/sessions/${sessionId}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  return res.ok;
 }

@@ -20,15 +20,34 @@ import type { OutputBlock } from "./output";
 /** One prior turn of chat, oldest first, for model context. */
 export type ChatTurn = { role: "user" | "agent"; text: string };
 
-/** POST /api/agents/:id/messages body. */
+/**
+ * POST /api/agents/:id/messages body. Omitting sessionId starts a fresh
+ * session — the server creates one (titled from the message) and returns its
+ * id in the response.
+ */
 export type SendMessageRequest = {
   message: string;
+  sessionId?: string;
 };
 
 /**
+ * One conversation with an agent. A user can hold many sessions per agent —
+ * the session, not the (user, agent) pair, is the thread. The auth token is
+ * the identity; the client never sends a session *key*, only the session id.
+ */
+export type ChatSession = {
+  id: string;
+  title: string;
+  createdAt: string;
+  lastMessageAt: string;
+};
+
+/** GET /api/agents/:id/sessions response, most recently active first. */
+export type ChatSessionListResponse = { sessions: ChatSession[] };
+
+/**
  * One persisted chat message. User messages carry `text`; agent replies carry
- * `blocks`. History is per (user, agent) — the auth token is the identity, so
- * the client never sends a session key.
+ * `blocks`.
  */
 export type ChatMessage = {
   id: string;
@@ -38,14 +57,22 @@ export type ChatMessage = {
   createdAt: string;
 };
 
-/** GET /api/agents/:id/messages response. */
+/** GET /api/agents/:id/sessions/:sessionId/messages response. */
 export type ChatHistoryResponse = { messages: ChatMessage[] };
 
 export type MessageUsage = { costUsd: number };
 
-/** POST /api/agents/:id/messages response (and the runtime's return shape). */
+/** The runtime's return shape (message in, reply blocks out). */
 export type RuntimeResult =
   | { ok: true; blocks: OutputBlock[]; usage: MessageUsage }
+  | { ok: false; error: string };
+
+/**
+ * POST /api/agents/:id/messages response — the runtime result plus the session
+ * the exchange landed in (fresh when the request carried no sessionId).
+ */
+export type SendMessageResponse =
+  | { ok: true; blocks: OutputBlock[]; usage: MessageUsage; session: ChatSession }
   | { ok: false; error: string };
 
 /** GET /api/agents response. */

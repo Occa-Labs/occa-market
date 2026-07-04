@@ -1,14 +1,23 @@
 /*
-  Chat routes. The auth token is the thread identity: history is stored and
-  replayed per (user, agent), and the runtime session key is derived from the
-  user id — the client sends nothing but the message text.
+  Chat routes. The auth token is the identity; the session is the thread.
+  Sending without a sessionId starts a fresh session (titled from the message)
+  and the response carries the session back. The runtime continuity key is the
+  session id, so separate sessions never share model context.
 */
 
 import { Router } from "express";
 import { asyncHandler } from "../../../lib/async-handler";
 import { requireAuth } from "../../../middleware/auth";
 import { sendMessageBody } from "../domain/schemas";
-import { appendExchange, listThread, toChatTurn } from "../repositories/messages";
+import {
+  appendExchange,
+  createSession,
+  deleteSession,
+  getOwnedSession,
+  listSessionMessages,
+  listSessions,
+  toChatTurn,
+} from "../repositories/messages";
 import { runtime } from "../services/runtime/registry";
 
 export const messagesRoutes = Router();
@@ -17,13 +26,57 @@ export const messagesRoutes = Router();
 // only — a gateway agent keeps its own session and gets none).
 const CONTEXT_TURNS = 20;
 
-// GET /api/agents/:id/messages — the caller's chat history with this agent.
+// A session title is its first user message, cut to list length.
+function sessionTitle(message: string): string {
+  const line = message.replace(/\s+/g, " ").trim();
+  return line.length > 64 ? `${line.slice(0, 63)}…` : line;
+}
+
+// GET /api/agents/:id/sessions — the caller's sessions with this agent.
 messagesRoutes.get(
-  "/:id/messages",
+  "/:id/sessions",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const messages = await listThread(req.params.id, req.user!.userId);
+    const sessions = await listSessions(req.params.id, req.user!.userId);
+    res.json({ sessions });
+  }),
+);
+
+// GET /api/agents/:id/sessions/:sessionId/messages — one session's history.
+messagesRoutes.get(
+  "/:id/sessions/:sessionId/messages",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const session = await getOwnedSession(
+      req.params.sessionId,
+      req.params.id,
+      req.user!.userId,
+    );
+    if (!session) {
+      res.status(404).json({ error: "unknown session" });
+      return;
+    }
+    const messages = await listSessionMessages(session.id);
     res.json({ messages });
+  }),
+);
+
+// DELETE /api/agents/:id/sessions/:sessionId — drop a session and its messages.
+messagesRoutes.delete(
+  "/:id/sessions/:sessionId",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const session = await getOwnedSession(
+      req.params.sessionId,
+      req.params.id,
+      req.user!.userId,
+    );
+    if (!session) {
+      res.status(404).json({ error: "unknown session" });
+      return;
+    }
+    await deleteSession(session.id);
+    res.json({ ok: true });
   }),
 );
 
@@ -41,12 +94,23 @@ messagesRoutes.post(
 
     const agentId = req.params.id;
     const userId = req.user!.userId;
-    const { message } = parsed.data;
+    const { message, sessionId } = parsed.data;
 
-    const thread = await listThread(agentId, userId);
+    const existing = sessionId
+      ? await getOwnedSession(sessionId, agentId, userId)
+      : null;
+    if (sessionId && !existing) {
+      res.status(404).json({ ok: false, error: "unknown session" });
+      return;
+    }
+
+    // A fresh session's id is minted up front — the runtime continuity key —
+    // but the row is only written after a successful exchange.
+    const threadId = existing?.id ?? crypto.randomUUID();
+    const thread = existing ? await listSessionMessages(existing.id) : [];
     const result = await runtime.sendMessage({
       agentId,
-      sessionKey: userId,
+      sessionKey: threadId,
       message,
       turn: thread.filter((m) => m.role === "agent").length,
       history: thread.slice(-CONTEXT_TURNS).map(toChatTurn),
@@ -58,10 +122,13 @@ messagesRoutes.post(
       return;
     }
 
-    // Persist only completed exchanges — a failed run leaves no history, so a
-    // retry doesn't double the user message.
-    await appendExchange(agentId, userId, message, result.blocks);
+    // Persist only completed exchanges — a failed run leaves no history (and
+    // no empty session), so a retry doesn't double the user message.
+    const session =
+      existing ??
+      (await createSession(threadId, agentId, userId, sessionTitle(message)));
+    await appendExchange(session.id, message, result.blocks);
 
-    res.json(result);
+    res.json({ ...result, session });
   }),
 );
