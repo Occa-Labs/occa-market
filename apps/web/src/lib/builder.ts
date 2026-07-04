@@ -12,7 +12,7 @@
   Option libraries (adapters, tools, skills) live in ./builder-options.
 */
 
-import type { AgentCategory, AgentDetail, MarketAgent } from "@occa-market/shared";
+import type { AgentCategory, MarketAgent } from "@occa-market/shared";
 import {
   ADAPTERS,
   type AdapterType,
@@ -24,7 +24,6 @@ import {
 export type ConnectionStatus = "idle" | "testing" | "ok" | "fail";
 
 export type DraftAgent = {
-  template: string | null;
   // identity (the product face)
   name: string;
   handle: string;
@@ -48,7 +47,6 @@ export type DraftAgent = {
 
 export function emptyDraft(): DraftAgent {
   return {
-    template: null,
     name: "",
     handle: "",
     glyph: "◇",
@@ -65,36 +63,6 @@ export function emptyDraft(): DraftAgent {
     skills: [],
     tools: [],
     workflow: [],
-  };
-}
-
-/** Fork a seed agent — prefills the workspace, leaves the gateway blank. */
-export function draftFromTemplate(
-  agent: MarketAgent,
-  detail: AgentDetail,
-): DraftAgent {
-  return {
-    ...emptyDraft(),
-    template: agent.id,
-    name: `${agent.name} fork`,
-    handle: `${agent.handle}_fork`,
-    glyph: agent.glyph,
-    category: agent.category,
-    tagline: agent.tagline,
-    persona: detail.longDescription,
-    pricePerMsg: agent.pricePerMsg,
-    skills: detail.skills.map((s) => ({
-      name: s.name,
-      description: s.description,
-      markdown: "",
-      source: "markdown" as const,
-    })),
-    // The template only exposes public tool names — carried over as labels
-    // with no config. Seeding skips configless entries; the provider replaces
-    // them with their own MCP servers.
-    tools: detail.tools.map((name) => ({ name, config: {} })),
-    // Fresh copies, so editing the fork never mutates the template's detail.
-    workflow: detail.workflow.map((s) => ({ text: s.text, uses: [...s.uses] })),
   };
 }
 

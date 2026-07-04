@@ -17,15 +17,10 @@ import {
   RefreshCw,
   X,
 } from "lucide-react";
-import {
-  CATEGORIES,
-  type AgentCategory,
-  type MarketAgent,
-} from "@occa-market/shared";
-import { createAgent, getAgentDetail, importSkill } from "@/lib/api";
+import { CATEGORIES, type AgentCategory } from "@occa-market/shared";
+import { createAgent, importSkill } from "@/lib/api";
 import {
   describeTool,
-  draftFromTemplate,
   draftToPreview,
   emptyDraft,
   handleFromName,
@@ -47,7 +42,6 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
-  "Start",
   "Identity",
   "Gateway",
   "Skills",
@@ -63,7 +57,7 @@ type PersistedDraft = { draft: DraftAgent; step: number };
 
 type Update = (patch: Partial<DraftAgent>) => void;
 
-export function AgentBuilder({ templates }: { templates: MarketAgent[] }) {
+export function AgentBuilder() {
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<DraftAgent>(emptyDraft());
   const [published, setPublished] = useState(false);
@@ -223,20 +217,12 @@ export function AgentBuilder({ templates }: { templates: MarketAgent[] }) {
             instead of forcing the whole layout wider. */}
         <div className="min-w-0">
           <div className="min-h-[360px]">
-            {step === 0 && (
-              <StartStep
-                draft={draft}
-                setDraft={setDraft}
-                templates={templates}
-                onPicked={() => setStep(1)}
-              />
-            )}
-            {step === 1 && <IdentityStep draft={draft} update={update} />}
-            {step === 2 && <GatewayStep draft={draft} update={update} />}
-            {step === 3 && <SkillsStep draft={draft} update={update} />}
-            {step === 4 && <ToolsStep draft={draft} update={update} />}
-            {step === 5 && <WorkflowStep draft={draft} update={update} />}
-            {step === 6 && (
+            {step === 0 && <IdentityStep draft={draft} update={update} />}
+            {step === 1 && <GatewayStep draft={draft} update={update} />}
+            {step === 2 && <SkillsStep draft={draft} update={update} />}
+            {step === 3 && <ToolsStep draft={draft} update={update} />}
+            {step === 4 && <WorkflowStep draft={draft} update={update} />}
+            {step === 5 && (
               <ReviewStep
                 draft={draft}
                 canPublish={canPublish}
@@ -354,77 +340,7 @@ function Stepper({
   );
 }
 
-/* ── Step 1 · Start ───────────────────────────────────────────── */
-
-function StartStep({
-  draft,
-  setDraft,
-  templates,
-  onPicked,
-}: {
-  draft: DraftAgent;
-  setDraft: (d: DraftAgent) => void;
-  templates: MarketAgent[];
-  onPicked: () => void;
-}) {
-  async function fork(agent: MarketAgent) {
-    // Pull the agent's full detail so the fork prefills persona/skills/workflow.
-    const record = await getAgentDetail(agent.id);
-    setDraft(
-      record ? draftFromTemplate(record.agent, record.detail) : emptyDraft(),
-    );
-    onPicked();
-  }
-
-  return (
-    <StepShell
-      title="Start from a template or scratch"
-      hint="Forking a seed agent prefills the persona, skills, and workflow. You still bring your own gateway."
-    >
-      <button
-        type="button"
-        onClick={() => {
-          setDraft(emptyDraft());
-          onPicked();
-        }}
-        className={`mb-3 w-full rounded-xl border bg-surface-2 px-4 py-3 text-left transition-colors hover:border-line-strong ${
-          draft.template === null ? "border-fg/25" : "border-line"
-        }`}
-      >
-        <p className="text-sm font-semibold text-fg">Start from scratch</p>
-        <p className="mt-0.5 font-mono text-xs text-muted">
-          A blank agent. You set everything.
-        </p>
-      </button>
-
-      <p className="eyebrow mb-2 mt-5">Or fork a template</p>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {templates.map((a) => (
-          <button
-            key={a.id}
-            type="button"
-            onClick={() => fork(a)}
-            className="flex items-start gap-3 rounded-xl border border-line bg-surface-2 px-3.5 py-3 text-left transition-colors hover:border-line-strong"
-          >
-            <span className="spotlight flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-line text-base text-fg">
-              {a.glyph}
-            </span>
-            <span>
-              <span className="block text-sm font-semibold text-fg">
-                {a.name}
-              </span>
-              <span className="mt-0.5 block font-mono text-[0.7rem] leading-relaxed text-muted">
-                {a.tagline}
-              </span>
-            </span>
-          </button>
-        ))}
-      </div>
-    </StepShell>
-  );
-}
-
-/* ── Step 2 · Identity ────────────────────────────────────────── */
+/* ── Step 1 · Identity ────────────────────────────────────────── */
 
 function IdentityStep({ draft, update }: { draft: DraftAgent; update: Update }) {
   return (

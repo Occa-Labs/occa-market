@@ -4,7 +4,7 @@
   A published agent lands OFFLINE (not in ALLOWED_AGENTS), so it shows in the
   catalog as "coming soon" until it's reviewed and wired to a live gateway.
   Fields the wizard doesn't collect (sample output, activity) get sensible
-  defaults here, the same way fallbackDetail fills them for un-authored agents.
+  defaults here.
 */
 
 import type { AgentDetail, MarketAgent } from "@occa-market/shared";
