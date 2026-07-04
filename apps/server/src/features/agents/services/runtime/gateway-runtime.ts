@@ -14,12 +14,11 @@
 */
 
 import type { ChatRunEvent, RuntimeResult } from "@occa-market/shared";
+import { env } from "../../../../config/env";
 import { gatewayRun, type GatewayStreamEvent } from "../../../../infra/gateway/client";
 import type { AgentRow } from "../../../../infra/database/schema";
 import { toSummaryBlocks } from "./prompts";
 import type { RuntimeInput } from "./runtime";
-
-const RUN_TIMEOUT_MS = 120_000;
 
 // The chat only ever learns WHAT ran, never what went in or came out — tool
 // inputs/results are the provider's internals (blueprint §12).
@@ -60,7 +59,7 @@ export class GatewayRuntime {
         // caller's session on the same gateway.
         sessionKey: `market:${row.id}:${input.sessionKey}`,
         allowedTools,
-        timeoutMs: RUN_TIMEOUT_MS,
+        timeoutMs: env.gatewayRunTimeoutMs,
       },
       onEvent ? (event) => onEvent(toChatRunEvent(event)) : undefined,
     );

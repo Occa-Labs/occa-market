@@ -30,6 +30,10 @@ const envSchema = z.object({
   RUNTIME_MAX_TOKENS: opt(z.coerce.number().int().positive().default(1024)),
   WELCOME_CREDIT: opt(z.coerce.number().nonnegative().default(0.5)),
   ALLOWED_AGENTS: opt(z.string().default("degen-scout")),
+  // Wall-clock budget for one gateway run. Tool-heavy turns (OHLCV pulls,
+  // transaction tapes) routinely pass 2 minutes; the live activity timeline
+  // makes the wait legible, so default generously.
+  GATEWAY_RUN_TIMEOUT_MS: opt(z.coerce.number().int().positive().default(300_000)),
   // Auth. JWT_SECRET signs our own session token (required, fail-fast).
   // Privy creds are optional so the app boots without them; the Privy login
   // route errors only when actually hit unconfigured.
@@ -59,6 +63,7 @@ function loadEnv() {
     runtimeMaxTokens: e.RUNTIME_MAX_TOKENS,
     welcomeCredit: e.WELCOME_CREDIT,
     allowedAgents: csv(e.ALLOWED_AGENTS),
+    gatewayRunTimeoutMs: e.GATEWAY_RUN_TIMEOUT_MS,
     jwtSecret: e.JWT_SECRET,
     privyAppId: e.PRIVY_APP_ID,
     privyAppSecret: e.PRIVY_APP_SECRET,
