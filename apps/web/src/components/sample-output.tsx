@@ -1,6 +1,7 @@
 import { AlertTriangle, Check, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { LaunchScan } from "@/components/launch-scan";
+import { MarkdownText } from "@/components/markdown-text";
 import {
   type MarketAgent,
   type OutputBlock,
@@ -61,11 +62,8 @@ export function SampleOutput({
 function Block({ block }: { block: OutputBlock }) {
   switch (block.type) {
     case "summary":
-      return (
-        <p className="font-mono text-sm leading-relaxed text-muted">
-          {block.text}
-        </p>
-      );
+      // Model-authored text arrives as markdown; render it, don't show it raw.
+      return <MarkdownText text={block.text} />;
 
     case "metrics":
       return (
