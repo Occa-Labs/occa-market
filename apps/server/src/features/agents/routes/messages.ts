@@ -8,7 +8,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../../../lib/async-handler";
 import { requireAuth } from "../../../middleware/auth";
-import { sendMessageBody } from "../domain/schemas";
+import { rateMessageBody, sendMessageBody } from "../domain/schemas";
 import {
   appendExchange,
   createSession,
@@ -16,6 +16,7 @@ import {
   getOwnedSession,
   listSessionMessages,
   listSessions,
+  rateMessage,
   setSessionShare,
   toChatTurn,
 } from "../repositories/messages";
@@ -182,9 +183,49 @@ messagesRoutes.post(
     const session =
       existing ??
       (await createSession(threadId, agentId, userId, sessionTitle(message)));
-    await appendExchange(session.id, message, result.blocks);
+    const messageId = await appendExchange(
+      agentId,
+      session.id,
+      message,
+      result.blocks,
+    );
 
-    writeLine({ t: "result", result: { ...result, session } });
+    writeLine({ t: "result", result: { ...result, session, messageId } });
     res.end();
+  }),
+);
+
+// PUT /api/agents/:id/sessions/:sessionId/messages/:messageId/rating —
+// thumbs on an agent reply (+1 / −1, 0 clears). Feeds the agent's reputation.
+messagesRoutes.put(
+  "/:id/sessions/:sessionId/messages/:messageId/rating",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const parsed = rateMessageBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, error: "value must be 1, -1 or 0" });
+      return;
+    }
+    const session = await getOwnedSession(
+      req.params.sessionId,
+      req.params.id,
+      req.user!.userId,
+    );
+    if (!session) {
+      res.status(404).json({ ok: false, error: "unknown session" });
+      return;
+    }
+    const ok = await rateMessage(
+      req.params.id,
+      session.id,
+      req.params.messageId,
+      req.user!.userId,
+      parsed.data.value,
+    );
+    if (!ok) {
+      res.status(404).json({ ok: false, error: "unknown message" });
+      return;
+    }
+    res.json({ ok: true });
   }),
 );

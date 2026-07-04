@@ -12,6 +12,11 @@ export const sendMessageBody = z.object({
   sessionId: z.string().uuid().optional(),
 });
 
+// Thumbs on an agent reply: +1 / −1 set, 0 clears.
+export const rateMessageBody = z.object({
+  value: z.union([z.literal(1), z.literal(-1), z.literal(0)]),
+});
+
 export type SendMessageBody = z.infer<typeof sendMessageBody>;
 
 // A skill the provider brings. `markdown` is the internal instruction content

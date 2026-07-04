@@ -4,7 +4,7 @@
   (now Drizzle/Postgres) stays out of the rest of the feature.
 */
 
-import { desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, gt } from "drizzle-orm";
 import type {
   AgentDetail,
   AgentWithDetail,
@@ -58,9 +58,17 @@ export async function getAgentWithDetail(
 ): Promise<AgentWithDetail | null> {
   const [row] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
   if (!row) return null;
+  // Rank is standing, not storage: position within the category by earned
+  // reputation, computed at read so it can never go stale.
+  const [{ ahead }] = await db
+    .select({ ahead: count() })
+    .from(agents)
+    .where(
+      and(eq(agents.category, row.category), gt(agents.reputation, row.reputation)),
+    );
   return {
     agent: toMarketAgent(row),
-    detail: normalizeDetail(row.detail),
+    detail: { ...normalizeDetail(row.detail), categoryRank: ahead + 1 },
     // Public runtime facts only — what powers the agent, never where it
     // lives. URL/bearer/externalAgentId stay internal.
     runtime: row.runtime

@@ -131,3 +131,28 @@ export const chatMessages = pgTable(
 
 export type ChatMessageRow = typeof chatMessages.$inferSelect;
 export type NewChatMessageRow = typeof chatMessages.$inferInsert;
+
+/*
+  Buyer feedback — one thumbs per agent reply (+1 / −1). agent_id is
+  denormalized so reputation aggregates don't need the session join; the
+  message link keeps every rating auditable back to a real conversation.
+*/
+export const messageRatings = pgTable(
+  "message_ratings",
+  {
+    messageId: uuid("message_id")
+      .primaryKey()
+      .references(() => chatMessages.id, { onDelete: "cascade" }),
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    value: integer("value").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("message_ratings_agent_idx").on(t.agentId)],
+);
+
+export type MessageRatingRow = typeof messageRatings.$inferSelect;

@@ -5,7 +5,7 @@
   or to replay as model context.
 */
 
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type {
   ChatMessage,
   ChatSession,
@@ -17,6 +17,7 @@ import {
   agents,
   chatMessages,
   chatSessions,
+  messageRatings,
   type AgentRow,
   type ChatMessageRow,
   type ChatSessionRow,
@@ -122,13 +123,17 @@ export async function listSessionMessages(
   sessionId: string,
 ): Promise<ChatMessage[]> {
   const rows = await db
-    .select()
+    .select({ message: chatMessages, rating: messageRatings.value })
     .from(chatMessages)
+    .leftJoin(messageRatings, eq(messageRatings.messageId, chatMessages.id))
     .where(eq(chatMessages.sessionId, sessionId))
     // An exchange is inserted as one statement, so both rows share a now()
     // timestamp — role desc ("user" > "agent") keeps the question first.
     .orderBy(asc(chatMessages.createdAt), desc(chatMessages.role));
-  return rows.map(toChatMessage);
+  return rows.map((r) => ({
+    ...toChatMessage(r.message),
+    rating: r.rating === 1 || r.rating === -1 ? r.rating : undefined,
+  }));
 }
 
 /** A stored turn as plain text, for model context (agent blocks → joined summaries). */
@@ -145,18 +150,82 @@ export function toChatTurn(m: ChatMessage): ChatTurn {
   };
 }
 
-/** Persist a completed exchange and bump the session's activity timestamp. */
+/*
+  Reputation is earned, never hand-set: every successful run counts 1, every
+  thumbs counts ±5, floored at zero. Recomputed from source data after
+  anything that moves it (a run, a rating) — no drift.
+*/
+export async function recomputeReputation(agentId: string): Promise<void> {
+  await db.execute(sql`
+    update agents set reputation = greatest(
+      0,
+      uses + 5 * coalesce(
+        (select sum(value) from message_ratings where agent_id = ${agentId}), 0
+      )
+    ) where id = ${agentId}
+  `);
+}
+
+/**
+ * Persist a completed exchange, bump the session's activity timestamp, and
+ * count the run. Returns the agent reply's id (the handle for rating it).
+ */
 export async function appendExchange(
+  agentId: string,
   sessionId: string,
   userText: string,
   replyBlocks: OutputBlock[],
-): Promise<void> {
-  await db.insert(chatMessages).values([
-    { sessionId, role: "user", text: userText },
-    { sessionId, role: "agent", blocks: replyBlocks },
-  ]);
+): Promise<string> {
+  const inserted = await db
+    .insert(chatMessages)
+    .values([
+      { sessionId, role: "user", text: userText },
+      { sessionId, role: "agent", blocks: replyBlocks },
+    ])
+    .returning({ id: chatMessages.id, role: chatMessages.role });
   await db
     .update(chatSessions)
     .set({ lastMessageAt: new Date() })
     .where(eq(chatSessions.id, sessionId));
+  // A completed run is a real use — the volume half of reputation.
+  await db
+    .update(agents)
+    .set({ uses: sql`${agents.uses} + 1` })
+    .where(eq(agents.id, agentId));
+  await recomputeReputation(agentId);
+  return inserted.find((m) => m.role === "agent")!.id;
+}
+
+/**
+ * Set (+1/−1) or clear (0) the caller's thumbs on one of their agent replies,
+ * then fold it into the agent's reputation. The message must belong to the
+ * given session (already ownership-checked by the route).
+ */
+export async function rateMessage(
+  agentId: string,
+  sessionId: string,
+  messageId: string,
+  userId: string,
+  value: 1 | -1 | 0,
+): Promise<boolean> {
+  const [message] = await db
+    .select({ id: chatMessages.id, role: chatMessages.role })
+    .from(chatMessages)
+    .where(and(eq(chatMessages.id, messageId), eq(chatMessages.sessionId, sessionId)))
+    .limit(1);
+  if (!message || message.role !== "agent") return false;
+
+  if (value === 0) {
+    await db.delete(messageRatings).where(eq(messageRatings.messageId, messageId));
+  } else {
+    await db
+      .insert(messageRatings)
+      .values({ messageId, agentId, userId, value })
+      .onConflictDoUpdate({
+        target: messageRatings.messageId,
+        set: { value, createdAt: new Date() },
+      });
+  }
+  await recomputeReputation(agentId);
+  return true;
 }

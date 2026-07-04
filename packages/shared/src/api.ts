@@ -56,8 +56,17 @@ export type ChatMessage = {
   role: "user" | "agent";
   text?: string;
   blocks?: OutputBlock[];
+  /** The caller's thumbs on an agent reply, when they rated it. */
+  rating?: 1 | -1;
   createdAt: string;
 };
+
+/**
+ * PUT /api/agents/:id/sessions/:sessionId/messages/:messageId/rating body.
+ * +1 / −1 set the thumbs, 0 clears it. Ratings feed the agent's reputation
+ * (runs + 5 × net thumbs) and stay auditable back to the conversation.
+ */
+export type RateMessageRequest = { value: 1 | -1 | 0 };
 
 /** GET /api/agents/:id/sessions/:sessionId/messages response. */
 export type ChatHistoryResponse = { messages: ChatMessage[] };
@@ -97,7 +106,14 @@ export type RuntimeResult =
  * the agent works, then one final `{t:"result", result}` line of this shape.
  */
 export type SendMessageResponse =
-  | { ok: true; blocks: OutputBlock[]; usage: MessageUsage; session: ChatSession }
+  | {
+      ok: true;
+      blocks: OutputBlock[];
+      usage: MessageUsage;
+      session: ChatSession;
+      /** The stored agent reply's id — the handle for rating it. */
+      messageId: string;
+    }
   | { ok: false; error: string; reason?: string };
 
 /**

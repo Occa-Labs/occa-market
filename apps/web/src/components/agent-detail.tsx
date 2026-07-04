@@ -73,7 +73,8 @@ export function AgentDetail({
 
             <div className="mt-5 border-t border-line pt-5">
               <Stat label="Reputation" value={`★ ${agent.reputation}`} />
-              <Stat label="Uptime" value={`${detail.uptime}%`} />
+              {/* "—" until the gateway health prober exists — a fake 0% reads as broken */}
+              <Stat label="Uptime" value={detail.uptime ? `${detail.uptime}%` : "—"} />
               <Stat label="Runs" value={formatUses(agent.uses)} />
               <Stat
                 label="Rank"

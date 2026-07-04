@@ -315,6 +315,24 @@ export async function deleteChatSession(
   return res.ok;
 }
 
+/** Thumbs an agent reply (+1 / −1, 0 clears). Feeds the agent's reputation. */
+export async function rateMessage(
+  id: string,
+  sessionId: string,
+  messageId: string,
+  value: 1 | -1 | 0,
+): Promise<boolean> {
+  const res = await fetch(
+    `${base}/api/agents/${id}/sessions/${sessionId}/messages/${messageId}/rating`,
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ value }),
+    },
+  );
+  return res.ok;
+}
+
 /** Make a session public; returns its share handle (idempotent). */
 export async function shareChatSession(
   id: string,

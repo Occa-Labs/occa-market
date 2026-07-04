@@ -2,7 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, Plus, RotateCcw, TriangleAlert, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  Plus,
+  RotateCcw,
+  ThumbsDown,
+  ThumbsUp,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ChatStream } from "@/components/chat-stream";
@@ -18,6 +27,7 @@ import {
   deleteChatSession,
   getSessionMessages,
   listChatSessions,
+  rateMessage,
   sendMessage,
 } from "@/lib/api";
 import { config } from "@/lib/config";
@@ -25,14 +35,15 @@ import { useAuth } from "@/components/auth/auth-provider";
 
 type Message =
   | { role: "user"; text: string }
-  | { role: "agent"; blocks: OutputBlock[] }
+  // id/rating ride along on stored + live replies so the thumbs can act.
+  | { role: "agent"; blocks: OutputBlock[]; id?: string; rating?: 1 | -1 }
   // A failed run — client-only (failed exchanges are never persisted).
   | { role: "error"; human: string; code: string; detail?: string; retryText: string };
 
 function fromStored(m: ChatMessage): Message {
   return m.role === "user"
     ? { role: "user", text: m.text ?? "" }
-    : { role: "agent", blocks: m.blocks ?? [] };
+    : { role: "agent", blocks: m.blocks ?? [], id: m.id, rating: m.rating };
 }
 
 /** One row of the live "what is the agent doing" timeline. */
@@ -134,6 +145,22 @@ export function AgentChat({
     if (id === activeId) newChat();
   }
 
+  // Thumbs on an agent reply. Toggle semantics: clicking the active thumb
+  // clears it. Optimistic — reverted if the server rejects.
+  async function rate(index: number, messageId: string, value: 1 | -1) {
+    if (!activeId) return;
+    const current = messages[index];
+    if (current?.role !== "agent") return;
+    const next = current.rating === value ? 0 : value;
+    const apply = (rating?: 1 | -1) =>
+      setMessages((prev) =>
+        prev.map((m, i) => (i === index && m.role === "agent" ? { ...m, rating } : m)),
+      );
+    apply(next === 0 ? undefined : next);
+    const ok = await rateMessage(agent.id, activeId, messageId, next);
+    if (!ok) apply(current.rating);
+  }
+
   // Fold one stream event into the activity timeline: a tool starts a running
   // step, its result completes it, prose between tools shows as writing.
   function onRunEvent(event: ChatRunEvent) {
@@ -191,7 +218,10 @@ export function AgentChat({
       );
 
       if (data.ok) {
-        setMessages((prev) => [...prev, { role: "agent", blocks: data.blocks }]);
+        setMessages((prev) => [
+          ...prev,
+          { role: "agent", blocks: data.blocks, id: data.messageId },
+        ]);
         // A fresh chat just became a real session; an existing one moves to
         // the top of the list with its new activity time.
         setActiveId(data.session.id);
@@ -364,6 +394,14 @@ export function AgentChat({
                   disabled={sending}
                   onRetry={() => void send(m.retryText)}
                 />
+              ) : m.role === "agent" && m.id ? (
+                <div key={i}>
+                  <ChatStream agent={agent} items={[m]} />
+                  <Thumbs
+                    value={m.rating}
+                    onRate={(v) => void rate(i, m.id!, v)}
+                  />
+                </div>
               ) : (
                 <ChatStream key={i} agent={agent} items={[m]} />
               ),
@@ -441,6 +479,50 @@ export function AgentChat({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/*
+  Buyer feedback on one reply — the rating half of the agent's reputation
+  (the other half is real usage). Quiet icon pair; active thumb lifts to fg,
+  a down-thumb reads as a state (bad).
+*/
+function Thumbs({
+  value,
+  onRate,
+}: {
+  value?: 1 | -1;
+  onRate: (v: 1 | -1) => void;
+}) {
+  return (
+    <div className="mt-1.5 flex items-center gap-1">
+      <button
+        type="button"
+        aria-label="Good reply"
+        aria-pressed={value === 1}
+        onClick={() => onRate(1)}
+        className={`flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border transition-colors ${
+          value === 1
+            ? "border-line-strong bg-surface-2 text-fg"
+            : "border-transparent text-faint hover:border-line hover:text-muted"
+        }`}
+      >
+        <ThumbsUp size={12} />
+      </button>
+      <button
+        type="button"
+        aria-label="Bad reply"
+        aria-pressed={value === -1}
+        onClick={() => onRate(-1)}
+        className={`flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border transition-colors ${
+          value === -1
+            ? "border-line-strong bg-surface-2 text-bad"
+            : "border-transparent text-faint hover:border-line hover:text-muted"
+        }`}
+      >
+        <ThumbsDown size={12} />
+      </button>
     </div>
   );
 }
