@@ -84,6 +84,22 @@ export type AgentToolInput = {
   config: Record<string, unknown>;
 };
 
+/** BYORT adapter families a provider's gateway can speak. */
+export type AdapterType = "claude-code" | "openclaw" | "codex" | "hermes";
+
+/**
+ * The BYORT runtime binding — which gateway runs this agent, and as what.
+ * INTERNAL: carries the provider's gateway address and bearer. Stored
+ * server-side only, never projected into the catalog (blueprint §12).
+ */
+export type AgentRuntimeInput = {
+  adapterType: AdapterType;
+  gatewayUrl: string;
+  apiKey?: string;
+  model: string;
+  externalAgentId: string;
+};
+
 /**
  * One step of the agent's public playbook ("How it works"). `uses` optionally
  * names the skills/tools (by their declared names) the step draws on — pills

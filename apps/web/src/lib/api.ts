@@ -12,6 +12,8 @@ import type {
   AuthResponse,
   AuthUser,
   CreateAgentRequest,
+  GatewayHealthRequest,
+  GatewayHealthResponse,
   MarketAgent,
   MarketStats,
   RuntimeResult,
@@ -70,7 +72,10 @@ export async function getMarketStats(): Promise<MarketStats> {
 
 export async function createAgent(
   body: CreateAgentRequest,
-): Promise<{ ok: true; agent: MarketAgent } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; agent: MarketAgent; seeded: boolean; seedReason?: string }
+  | { ok: false; error: string }
+> {
   const res = await fetch(`${base}/api/agents`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -78,7 +83,12 @@ export async function createAgent(
   });
   if (res.status === 201) {
     const data = (await res.json()) as AgentCreatedResponse;
-    return { ok: true, agent: data.agent };
+    return {
+      ok: true,
+      agent: data.agent,
+      seeded: data.seeded,
+      seedReason: data.seedReason,
+    };
   }
   const data = await res.json().catch(() => ({ error: "publish failed" }));
   return { ok: false, error: data.error ?? "publish failed" };
@@ -99,6 +109,26 @@ export async function importSkill(
   }
   const data = await res.json().catch(() => ({ error: "import failed" }));
   return { ok: false, error: data.error ?? "import failed" };
+}
+
+/** Probe a gateway's /v1/health through the server. Never throws. */
+export async function testGateway(
+  target: GatewayHealthRequest,
+): Promise<GatewayHealthResponse> {
+  try {
+    const res = await fetch(`${base}/api/agents/gateway/health`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(target),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({ error: "probe failed" }));
+      return { ok: false, error: "probe_rejected", reason: data.error ?? "probe failed" };
+    }
+    return (await res.json()) as GatewayHealthResponse;
+  } catch {
+    return { ok: false, error: "api_unreachable", reason: "can't reach the market API" };
+  }
 }
 
 // ── Auth ───────────────────────────────────────────────────────────────────

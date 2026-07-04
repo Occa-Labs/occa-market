@@ -43,7 +43,11 @@ agentsRoutes.post(
       return;
     }
 
-    const body: AgentCreatedResponse = { agent: result.agent };
+    const body: AgentCreatedResponse = {
+      agent: result.agent,
+      seeded: result.seeded,
+      seedReason: result.seedReason,
+    };
     res.status(201).json(body);
   }),
 );

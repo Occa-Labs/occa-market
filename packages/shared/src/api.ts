@@ -8,6 +8,7 @@
 import type {
   AgentCategory,
   AgentDetail,
+  AgentRuntimeInput,
   AgentSkillInput,
   AgentToolInput,
   AgentWorkflowStep,
@@ -55,10 +56,16 @@ export type CreateAgentRequest = {
   skills: AgentSkillInput[];
   tools: AgentToolInput[];
   workflow: AgentWorkflowStep[];
+  runtime: AgentRuntimeInput;
 };
 
 /** POST /api/agents response. */
-export type AgentCreatedResponse = { agent: MarketAgent };
+export type AgentCreatedResponse = {
+  agent: MarketAgent;
+  /** Whether the workspace (CLAUDE.md + .mcp.json) landed on the gateway. */
+  seeded: boolean;
+  seedReason?: string;
+};
 
 /**
  * POST /api/agents/skills/import — pull a skill's SKILL.md from a public GitHub
@@ -66,6 +73,14 @@ export type AgentCreatedResponse = { agent: MarketAgent };
  */
 export type SkillImportRequest = { source: string };
 export type SkillImportResponse = { skill: AgentSkillInput };
+
+/**
+ * POST /api/agents/gateway/health — probe a provider's gateway through the
+ * server (the browser can't call it cross-origin). Returns the gateway's own
+ * verdict: reachable + bearer valid + runtime ready.
+ */
+export type GatewayHealthRequest = { gatewayUrl: string; apiKey?: string };
+export type GatewayHealthResponse = { ok: boolean; error?: string; reason?: string };
 
 /** POST /api/auth/privy body — exchange a Privy access token for our session. */
 export type PrivyLoginRequest = { accessToken: string };

@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { CATEGORIES, type AgentCategory } from "@occa-market/shared";
-import { createAgent, importSkill } from "@/lib/api";
+import { createAgent, importSkill, testGateway } from "@/lib/api";
 import {
   describeTool,
   draftToPreview,
@@ -63,6 +63,11 @@ export function AgentBuilder() {
   const [published, setPublished] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Did the workspace land on the provider's gateway at publish time?
+  const [seedResult, setSeedResult] = useState<{
+    seeded: boolean;
+    reason?: string;
+  } | null>(null);
   // Gate persistence until we've hydrated, so the first save can't clobber a
   // stored draft with the empty default before hydration runs.
   const [hydrated, setHydrated] = useState(false);
@@ -173,9 +178,19 @@ export function AgentBuilder() {
       skills: draft.skills,
       tools: draft.tools,
       workflow: draft.workflow,
+      // The BYORT binding — where the agent runs. The server stores it
+      // internally and seeds the workspace onto this gateway.
+      runtime: {
+        adapterType: draft.adapterType,
+        gatewayUrl: draft.gatewayUrl.trim(),
+        apiKey: draft.apiKey || undefined,
+        model: draft.model,
+        externalAgentId: draft.externalAgentId,
+      },
     });
     setPublishing(false);
     if (res.ok) {
+      setSeedResult({ seeded: res.seeded, reason: res.seedReason });
       setPublished(true);
       // draft is submitted — don't leave it lingering for the next build
       try {
@@ -190,10 +205,12 @@ export function AgentBuilder() {
     return (
       <Published
         draft={draft}
+        seedResult={seedResult}
         onReset={() => {
           setDraft(emptyDraft());
           setStep(0);
           setPublished(false);
+          setSeedResult(null);
         }}
       />
     );
@@ -435,7 +452,10 @@ function IdentityStep({ draft, update }: { draft: DraftAgent; update: Update }) 
 
 function GatewayStep({ draft, update }: { draft: DraftAgent; update: Update }) {
   const adapter = ADAPTERS.find((a) => a.type === draft.adapterType);
-  // Always keep the current model selectable, even if a forked template carried
+  // Why the connection can be "fail" — shown next to the badge, kept local
+  // (never persisted; a reload retests anyway).
+  const [failReason, setFailReason] = useState<string | null>(null);
+  // Always keep the current model selectable, even if a restored draft carried
   // one that isn't in this adapter's list.
   const adapterModels = adapter?.models ?? [];
   const modelOptions =
@@ -451,13 +471,25 @@ function GatewayStep({ draft, update }: { draft: DraftAgent; update: Update }) {
     }
   }, [draft.externalAgentId, draft.handle, draft.name, update]);
 
-  function test() {
+  async function test() {
     if (!draft.gatewayUrl.trim()) {
+      setFailReason("gateway URL is required");
       update({ connection: "fail" });
       return;
     }
+    setFailReason(null);
     update({ connection: "testing" });
-    setTimeout(() => update({ connection: "ok" }), 800);
+    // Real probe: server → gateway /v1/health (reachable + bearer + runtime).
+    const health = await testGateway({
+      gatewayUrl: draft.gatewayUrl.trim(),
+      apiKey: draft.apiKey || undefined,
+    });
+    if (health.ok) {
+      update({ connection: "ok" });
+    } else {
+      setFailReason(health.reason ?? health.error ?? null);
+      update({ connection: "fail" });
+    }
   }
 
   return (
@@ -570,11 +602,16 @@ function GatewayStep({ draft, update }: { draft: DraftAgent; update: Update }) {
           variant="secondary"
           size="sm"
           disabled={draft.connection === "testing"}
-          onClick={test}
+          onClick={() => void test()}
         >
           Test connection
         </Button>
         <ConnectionBadge status={draft.connection} />
+        {draft.connection === "fail" && failReason && (
+          <span className="truncate font-mono text-xs text-faint" title={failReason}>
+            {failReason}
+          </span>
+        )}
       </div>
 
       <p className="mt-5 rounded-xl border border-line bg-surface-2 px-3.5 py-3 font-mono text-[0.7rem] leading-relaxed text-faint">
@@ -1317,9 +1354,11 @@ function PreviewCard({ preview }: { preview: ReturnType<typeof draftToPreview> }
 
 function Published({
   draft,
+  seedResult,
   onReset,
 }: {
   draft: DraftAgent;
+  seedResult: { seeded: boolean; reason?: string } | null;
   onReset: () => void;
 }) {
   return (
@@ -1334,6 +1373,19 @@ function Published({
         {draft.name || "Your agent"} is queued for the catalog. Public
         publishing opens after review.
       </p>
+      {seedResult && (
+        <p
+          className={`mx-auto mt-3 max-w-sm font-mono text-xs leading-relaxed ${
+            seedResult.seeded ? "text-muted" : "text-warn"
+          }`}
+        >
+          {seedResult.seeded
+            ? "Workspace seeded to your gateway — skills and tools are in place."
+            : `Workspace seed didn't land${
+                seedResult.reason ? ` (${seedResult.reason})` : ""
+              }. The listing is saved; reconnect your gateway and re-publishing support lands with wiring.`}
+        </p>
+      )}
       <div className="mt-6 flex justify-center gap-3">
         <Button variant="secondary" size="md" href="/#catalog">
           Back to catalog

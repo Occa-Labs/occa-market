@@ -1,5 +1,6 @@
 /*
-  Publish flow — turns a validated create request into a stored agent.
+  Publish flow — turns a validated create request into a stored agent, then
+  pushes its workspace (CLAUDE.md + .mcp.json) onto the provider's gateway.
 
   A published agent lands OFFLINE (not in ALLOWED_AGENTS), so it shows in the
   catalog as "coming soon" until it's reviewed and wired to a live gateway.
@@ -9,13 +10,15 @@
 
 import type { AgentDetail, MarketAgent } from "@occa-market/shared";
 import type { NewAgentRow } from "../../../infra/database/schema";
+import { gatewaySeed } from "../../../infra/gateway/client";
 import { agentExists, insertAgent } from "../repositories/agents";
 import type { CreateAgentBody } from "../domain/schemas";
+import { buildSeedFiles } from "./runtime/seed";
 
 const DEFAULT_ACCENT = "#2ee6d6";
 
 type PublishResult =
-  | { ok: true; agent: MarketAgent }
+  | { ok: true; agent: MarketAgent; seeded: boolean; seedReason?: string }
   | { ok: false; error: string };
 
 function slugify(handle: string): string {
@@ -80,6 +83,7 @@ export async function publishAgent(input: CreateAgentBody): Promise<PublishResul
   if (!id) return { ok: false, error: "handle must contain letters or numbers" };
   if (await agentExists(id)) return { ok: false, error: "handle already taken" };
 
+  const detail = buildDetail(input);
   const row: NewAgentRow = {
     id,
     name: input.name,
@@ -94,13 +98,25 @@ export async function publishAgent(input: CreateAgentBody): Promise<PublishResul
     provider: "Community",
     seed: false,
     accent: DEFAULT_ACCENT,
-    detail: buildDetail(input),
+    detail,
     // Internal skill content (markdown) — kept for gateway seeding, not public.
     skillSources: input.skills,
     // Internal MCP server configs — become the workspace .mcp.json at seed time.
     toolConfigs: input.tools,
+    // Internal BYORT binding — where this agent runs.
+    runtime: input.runtime,
   };
 
   const agent = await insertAgent(row);
-  return { ok: true, agent };
+
+  // Push the workspace onto the provider's gateway. Publish still succeeds if
+  // the push fails — the catalog row is real, and the workspace can be pushed
+  // again once the gateway is reachable (re-seed endpoint comes with wiring).
+  const seeded = await gatewaySeed(
+    { gatewayUrl: input.runtime.gatewayUrl, apiKey: input.runtime.apiKey },
+    input.runtime.externalAgentId,
+    buildSeedFiles(agent, detail, input.skills, input.tools),
+  );
+
+  return { ok: true, agent, seeded: seeded.ok, seedReason: seeded.reason };
 }

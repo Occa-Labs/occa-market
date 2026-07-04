@@ -45,6 +45,31 @@ export const workflowStepSchema = z.object({
   uses: z.array(z.string()).default([]),
 });
 
+// A provider's gateway address. Normalized without a trailing slash — the
+// client appends /v1/… paths.
+export const gatewayTargetSchema = z.object({
+  gatewayUrl: z
+    .string()
+    .trim()
+    .url("gatewayUrl must be a valid http(s) URL")
+    .transform((u) => u.replace(/\/+$/, "")),
+  apiKey: z.string().trim().optional(),
+});
+
+// The full BYORT runtime binding an agent publishes with. Internal — the
+// bearer must never reach a public projection.
+export const runtimeInputSchema = z.object({
+  adapterType: z.enum(["claude-code", "openclaw", "codex", "hermes"]),
+  gatewayUrl: z
+    .string()
+    .trim()
+    .url("gatewayUrl must be a valid http(s) URL")
+    .transform((u) => u.replace(/\/+$/, "")),
+  apiKey: z.string().trim().optional(),
+  model: z.string().trim().min(1, "model is required"),
+  externalAgentId: z.string().trim().min(1, "externalAgentId is required"),
+});
+
 export const createAgentBody = z.object({
   name: z.string().trim().min(1, "name is required"),
   handle: z.string().trim().min(1, "handle is required"),
@@ -56,6 +81,7 @@ export const createAgentBody = z.object({
   skills: z.array(skillInputSchema).default([]),
   tools: z.array(toolInputSchema).default([]),
   workflow: z.array(workflowStepSchema).default([]),
+  runtime: runtimeInputSchema,
 });
 
 export type CreateAgentBody = z.infer<typeof createAgentBody>;

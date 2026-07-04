@@ -19,6 +19,7 @@ import {
 import type {
   AgentCategory,
   AgentDetail,
+  AgentRuntimeInput,
   AgentSkillInput,
   AgentStatus,
   AgentToolInput,
@@ -62,6 +63,10 @@ export const agents = pgTable("agents", {
   // Internal: MCP server configs for provider-brought tools — seeded to the
   // gateway workspace as .mcp.json. Same visibility rule as skillSources.
   toolConfigs: jsonb("tool_configs").$type<AgentToolInput[]>().notNull().default([]),
+  // Internal: the BYORT runtime binding (gateway address + bearer + model +
+  // externalAgentId). Secret-bearing — never leaves the server. Plaintext for
+  // the local MVP; needs encryption-at-rest before any hosted deploy.
+  runtime: jsonb("runtime").$type<AgentRuntimeInput>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

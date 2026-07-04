@@ -5,7 +5,9 @@
   — the provider brings both (skill markdown, MCP server configs).
 */
 
-export type AdapterType = "claude-code" | "openclaw" | "codex" | "hermes";
+import type { AdapterType } from "@occa-market/shared";
+
+export type { AdapterType };
 
 export type AdapterInfo = {
   type: AdapterType;
