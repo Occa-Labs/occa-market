@@ -109,6 +109,22 @@ body {
     0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
+/*
+  Inline text link — the ONE global link style. Accent cyan (the single brand
+  accent; links are a sanctioned cyan use), faint underline that solidifies on
+  hover. Apply to every inline "go somewhere / do something" text affordance.
+*/
+.text-link {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
+  transition: text-decoration-color 150ms ease;
+}
+.text-link:hover {
+  text-decoration-color: var(--color-accent);
+}
+
 /* Soft radial spotlight to sit an illustration/icon on. */
 .spotlight {
   background-image: radial-gradient(

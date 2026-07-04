@@ -19,7 +19,7 @@ const variants: Record<Variant, string> = {
   default:
     "text-fg [background:linear-gradient(180deg,rgba(255,255,255,0.04)_45%,rgba(255,255,255,0)_55%),#42434d] shadow-[0_2px_3px_-1px_rgba(0,0,0,0.08),0_0_0_0.5px_rgba(247,247,248,0.10),0_1px_0_0_rgba(255,255,255,0.10)_inset] hover:[background:linear-gradient(180deg,rgba(255,255,255,0.06)_45%,rgba(255,255,255,0)_55%),#4a4b56]",
   secondary:
-    "border border-line-strong bg-surface-2 text-fg shadow-[0_1px_2px_rgba(0,0,0,0.35),inset_0_1px_0_0_rgba(255,255,255,0.05)] hover:border-fg/25 hover:brightness-110",
+    "border border-white/25 bg-transparent text-fg hover:border-white/40 hover:bg-white/[0.04]",
   light:
     "bg-[#e4e4e7] text-bg shadow-[0_1px_2px_rgba(0,0,0,0.4)] hover:opacity-90",
 };

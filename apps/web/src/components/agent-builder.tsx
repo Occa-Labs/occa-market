@@ -44,6 +44,7 @@ import {
 } from "@/lib/builder-options";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const STEPS = [
   "Start",
@@ -118,6 +119,43 @@ export function AgentBuilder({ templates }: { templates: MarketAgent[] }) {
       /* storage full or blocked — persistence is best-effort */
     }
   }, [draft, step, hydrated, published]);
+
+  // Adopt draft writes from OTHER /build tabs. Persistence is last-writer-wins,
+  // so without this a stale tab silently clobbers work done here (that's how
+  // freshly imported skills vanished on refresh). The storage event only fires
+  // in the tabs that didn't write; returning the same object when nothing
+  // materially changed re-renders nothing and breaks the write ping-pong
+  // (each tab persists its own `step`, so payloads always differ across tabs).
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key !== DRAFT_STORAGE_KEY || !e.newValue) return;
+      try {
+        const saved = JSON.parse(e.newValue) as Partial<PersistedDraft>;
+        if (!saved.draft) return;
+        const incoming = saved.draft;
+        setDraft((d) => {
+          const next: DraftAgent = {
+            ...d,
+            ...incoming,
+            tools: Array.isArray(incoming.tools)
+              ? incoming.tools.filter(isDraftTool)
+              : [],
+            workflow: Array.isArray(incoming.workflow)
+              ? incoming.workflow.filter(isDraftStep)
+              : [],
+            // secrets and probe status are local to this tab
+            apiKey: d.apiKey,
+            connection: d.connection,
+          };
+          return JSON.stringify(next) === JSON.stringify(d) ? d : next;
+        });
+      } catch {
+        /* corrupt payload — ignore */
+      }
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   const canPublish =
     draft.name.trim().length > 0 &&
@@ -205,6 +243,7 @@ export function AgentBuilder({ templates }: { templates: MarketAgent[] }) {
                 publishing={publishing}
                 error={error}
                 onPublish={publish}
+                onJump={setStep}
               />
             )}
           </div>
@@ -779,12 +818,13 @@ function SkillsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
             <button
               type="button"
               aria-label={`Remove ${s.name}`}
+              title={`Remove ${s.name}`}
               onClick={() =>
                 update({ skills: draft.skills.filter((x) => x.name !== s.name) })
               }
-              className="mt-0.5 flex-none text-faint transition-colors hover:text-fg"
+              className="flex h-7 w-7 flex-none items-center justify-center rounded-md text-muted transition-colors hover:bg-bg hover:text-fg"
             >
-              <X size={13} />
+              <X size={14} />
             </button>
           </div>
         ))}
@@ -824,6 +864,7 @@ function SkillsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
             <TextInput
               value={name}
               placeholder="Skill name (optional — read from the frontmatter if blank)"
+              className="bg-bg"
               onChange={(e) => setName(e.target.value)}
             />
             <TextArea
@@ -832,7 +873,7 @@ function SkillsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
               placeholder={
                 "Paste the skill's SKILL.md here…\n\n---\nname: risk-flagging\ndescription: Surfaces the obvious ways a token can hurt you.\n---\n\n# Instructions\n…"
               }
-              className="mt-2"
+              className="mt-2 bg-bg"
               onChange={(e) => setMarkdown(e.target.value)}
             />
             <div className="mt-2 flex justify-end">
@@ -847,6 +888,7 @@ function SkillsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
             <TextInput
               value={source}
               placeholder="owner/repo/slug or a github.com/…/tree/… URL"
+              className="bg-bg"
               onChange={(e) => {
                 setSource(e.target.value);
                 setImportError(null);
@@ -942,12 +984,13 @@ function ToolsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
             <button
               type="button"
               aria-label={`Remove ${t.name}`}
+              title={`Remove ${t.name}`}
               onClick={() =>
                 update({ tools: draft.tools.filter((x) => x.name !== t.name) })
               }
-              className="mt-0.5 flex-none text-faint transition-colors hover:text-fg"
+              className="flex h-7 w-7 flex-none items-center justify-center rounded-md text-muted transition-colors hover:bg-bg hover:text-fg"
             >
-              <X size={13} />
+              <X size={14} />
             </button>
           </div>
         ))}
@@ -958,6 +1001,7 @@ function ToolsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
         <TextInput
           value={name}
           placeholder="Tool name (optional — read from the config keys if present)"
+          className="bg-bg"
           onChange={(e) => {
             setName(e.target.value);
             setError(null);
@@ -969,7 +1013,7 @@ function ToolsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
           placeholder={
             'Paste the MCP server config from its README…\n\n{\n  "mcpServers": {\n    "dexscreener": {\n      "command": "npx",\n      "args": ["-y", "dexscreener-mcp"]\n    }\n  }\n}'
           }
-          className="mt-2"
+          className="mt-2 bg-bg"
           onChange={(e) => {
             setConfig(e.target.value);
             setError(null);
@@ -1101,41 +1145,27 @@ function WorkflowStep({ draft, update }: { draft: DraftAgent; update: Update }) 
                     </div>
                   )}
                 </div>
-                <div className="flex flex-none items-center gap-1 pt-0.5">
-                  <button
-                    type="button"
-                    aria-label="Move step up"
+                <div className="flex flex-none items-center gap-0.5 rounded-lg border border-line bg-surface-2 p-0.5">
+                  <StepAction
+                    label="Move step up"
                     disabled={i === 0}
                     onClick={() => move(i, -1)}
-                    className="text-faint transition-colors hover:text-fg disabled:opacity-30 disabled:hover:text-faint"
                   >
-                    <ArrowUp size={12} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Move step down"
+                    <ArrowUp size={14} />
+                  </StepAction>
+                  <StepAction
+                    label="Move step down"
                     disabled={lastStep}
                     onClick={() => move(i, 1)}
-                    className="text-faint transition-colors hover:text-fg disabled:opacity-30 disabled:hover:text-faint"
                   >
-                    <ArrowDown size={12} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Edit step ${i + 1}`}
-                    onClick={() => edit(i)}
-                    className="text-faint transition-colors hover:text-fg"
-                  >
-                    <Pencil size={12} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Remove step ${i + 1}`}
-                    onClick={() => remove(i)}
-                    className="text-faint transition-colors hover:text-fg"
-                  >
-                    <X size={12} />
-                  </button>
+                    <ArrowDown size={14} />
+                  </StepAction>
+                  <StepAction label={`Edit step ${i + 1}`} onClick={() => edit(i)}>
+                    <Pencil size={13} />
+                  </StepAction>
+                  <StepAction label={`Remove step ${i + 1}`} onClick={() => remove(i)}>
+                    <X size={14} />
+                  </StepAction>
                 </div>
               </div>
             </li>
@@ -1143,49 +1173,21 @@ function WorkflowStep({ draft, update }: { draft: DraftAgent; update: Update }) 
         })}
       </ol>
 
-      {/* add / edit a step */}
+      {/* add / edit a step — input and action on one row, tags underneath */}
       <div className="mt-3 rounded-xl border border-line bg-surface-2 p-3.5">
-        <TextInput
-          value={text}
-          placeholder={editing !== null ? "Edit the step…" : "Add a step…"}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              save();
-            }
-          }}
-        />
-        <p className="mt-3 font-mono text-[0.7rem] uppercase tracking-[0.18em] text-faint">
-          Uses
-        </p>
-        {capabilities.length === 0 ? (
-          <p className="mt-1.5 font-mono text-xs text-faint">
-            Add skills or tools first to tag what a step draws on.
-          </p>
-        ) : (
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {capabilities.map((name) => {
-              const on = uses.includes(name);
-              return (
-                <button
-                  key={name}
-                  type="button"
-                  onClick={() => toggleUse(name)}
-                  aria-pressed={on}
-                  className={`rounded-full border px-2.5 py-1 font-mono text-xs transition-colors ${
-                    on
-                      ? "border-fg/25 bg-bg text-fg"
-                      : "border-line text-muted hover:border-line-strong hover:text-fg"
-                  }`}
-                >
-                  {name}
-                </button>
-              );
-            })}
-          </div>
-        )}
-        <div className="mt-3 flex justify-end gap-2">
+        <div className="flex gap-2">
+          <TextInput
+            value={text}
+            placeholder={editing !== null ? "Edit the step…" : "Add a step…"}
+            className="bg-bg"
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                save();
+              }
+            }}
+          />
           {editing !== null && (
             <Button variant="secondary" size="md" onClick={resetForm}>
               Cancel
@@ -1193,17 +1195,78 @@ function WorkflowStep({ draft, update }: { draft: DraftAgent; update: Update }) 
           )}
           <Button variant="secondary" size="md" disabled={!text.trim()} onClick={save}>
             {editing !== null ? (
-              "Save step"
+              "Save"
             ) : (
               <>
                 <Plus size={14} className="mr-1.5" />
-                Add step
+                Add
               </>
             )}
           </Button>
         </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <span className="mr-1.5 font-mono text-[0.7rem] uppercase tracking-[0.18em] text-faint">
+            Uses
+          </span>
+          {capabilities.length === 0 ? (
+            <span className="font-mono text-xs text-faint">
+              add skills or tools first to tag what a step draws on
+            </span>
+          ) : (
+            capabilities.map((name) => {
+              const on = uses.includes(name);
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => toggleUse(name)}
+                  aria-pressed={on}
+                  className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-xs transition-colors ${
+                    on
+                      ? "border-white/40 bg-bg text-fg"
+                      : "border-white/25 text-muted hover:border-white/40 hover:text-fg"
+                  }`}
+                >
+                  {on ? (
+                    <Check size={11} strokeWidth={3} className="text-accent" />
+                  ) : (
+                    <Plus size={11} className="text-faint" />
+                  )}
+                  {name}
+                </button>
+              );
+            })
+          )}
+        </div>
       </div>
     </StepShell>
+  );
+}
+
+/* Small icon button for step-row controls — real hit target, visible hover. */
+function StepAction({
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-bg hover:text-fg disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-muted"
+    >
+      {children}
+    </button>
   );
 }
 
@@ -1215,15 +1278,26 @@ function ReviewStep({
   publishing,
   error,
   onPublish,
+  onJump,
 }: {
   draft: DraftAgent;
   canPublish: boolean;
   publishing: boolean;
   error: string | null;
   onPublish: () => void;
+  onJump: (step: number) => void;
 }) {
   const preview = draftToPreview(draft);
   const adapter = ADAPTERS.find((a) => a.type === draft.adapterType);
+  // Connection status resets on reload (never restored stale), so surface the
+  // way back to the Gateway step right where the red status is.
+  const gatewayStep = STEPS.indexOf("Gateway");
+  // Mirror of canPublish, itemised — tell the provider what's actually missing.
+  const missing = [
+    !draft.name.trim() && "a name",
+    !draft.tagline.trim() && "a tagline",
+    draft.connection !== "ok" && "a connected gateway",
+  ].filter((m): m is string => Boolean(m));
 
   return (
     <StepShell
@@ -1239,6 +1313,17 @@ function ReviewStep({
             label="Gateway"
             value={draft.connection === "ok" ? "Connected" : "Not connected"}
             bad={draft.connection !== "ok"}
+            action={
+              draft.connection !== "ok" ? (
+                <button
+                  type="button"
+                  onClick={() => onJump(gatewayStep)}
+                  className="text-link"
+                >
+                  Reconnect
+                </button>
+              ) : undefined
+            }
           />
           <SummaryRow label="Skills" value={`${draft.skills.length}`} />
           <SummaryRow label="Tools" value={`${draft.tools.length}`} />
@@ -1252,7 +1337,7 @@ function ReviewStep({
 
       {!canPublish && (
         <p className="mt-5 font-mono text-xs text-warn">
-          Add a name and tagline, and connect the gateway, before publishing.
+          Still needed before publishing: {missing.join(", ")}.
         </p>
       )}
 
@@ -1276,15 +1361,20 @@ function SummaryRow({
   label,
   value,
   bad,
+  action,
 }: {
   label: string;
   value: string;
   bad?: boolean;
+  action?: ReactNode;
 }) {
   return (
     <div className="flex items-baseline justify-between gap-3 border-b border-line pb-2">
       <span className="text-faint">{label}</span>
-      <span className={bad ? "text-warn" : "text-fg"}>{value}</span>
+      <span className="flex items-baseline gap-3">
+        <span className={bad ? "text-warn" : "text-fg"}>{value}</span>
+        {action}
+      </span>
     </div>
   );
 }
@@ -1457,7 +1547,10 @@ function TextInput({
 }: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      className={`h-10 w-full rounded-xl border border-line bg-surface-2 px-3.5 font-mono text-sm text-fg placeholder:text-faint focus:border-line-strong focus:outline-none ${className}`}
+      className={cn(
+        "h-10 w-full rounded-xl border border-line bg-surface-2 px-3.5 font-mono text-sm text-fg placeholder:text-faint focus:border-line-strong focus:outline-none",
+        className,
+      )}
       {...props}
     />
   );
@@ -1469,7 +1562,10 @@ function TextArea({
 }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
-      className={`w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 font-mono text-sm leading-relaxed text-fg placeholder:text-faint focus:border-line-strong focus:outline-none ${className}`}
+      className={cn(
+        "w-full rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 font-mono text-sm leading-relaxed text-fg placeholder:text-faint focus:border-line-strong focus:outline-none",
+        className,
+      )}
       {...props}
     />
   );
