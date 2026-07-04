@@ -12,7 +12,7 @@ import { GatewayRuntime } from "./gateway-runtime";
 import { LLMRuntime } from "./llm-runtime";
 import { MockRuntime } from "./mock-runtime";
 import type { AgentRuntime, RuntimeInput } from "./runtime";
-import type { RuntimeResult } from "@occa-market/shared";
+import type { ChatRunEvent, RuntimeResult } from "@occa-market/shared";
 
 const factories = {
   llm: () => new LLMRuntime(),
@@ -32,10 +32,13 @@ class DispatchRuntime implements AgentRuntime {
 
   constructor(private fallback: AgentRuntime) {}
 
-  async sendMessage(input: RuntimeInput): Promise<RuntimeResult> {
+  async sendMessage(
+    input: RuntimeInput,
+    onEvent?: (event: ChatRunEvent) => void,
+  ): Promise<RuntimeResult> {
     const row = await getAgentRow(input.agentId);
     if (!row) return { ok: false, error: "unknown agent" };
-    if (row.runtime) return this.gateway.run(row, input);
+    if (row.runtime) return this.gateway.run(row, input, onEvent);
     return this.fallback.sendMessage(input);
   }
 }

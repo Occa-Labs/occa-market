@@ -123,6 +123,9 @@ messagesRoutes.delete(
 );
 
 // POST /api/agents/:id/messages — send a message, get the agent's reply blocks.
+// Streams NDJSON: `{t:"event", event}` lines while the agent works (the chat's
+// live activity timeline), then one `{t:"result", result}` line. Pre-run
+// failures (validation, unknown session) respond as plain JSON with a status.
 messagesRoutes.post(
   "/:id/messages",
   requireAuth,
@@ -146,21 +149,31 @@ messagesRoutes.post(
       return;
     }
 
+    // From here on the run is live — switch to the NDJSON stream. Errors now
+    // ride in the result line, not the HTTP status.
+    res.setHeader("Content-Type", "application/x-ndjson");
+    res.setHeader("Cache-Control", "no-cache");
+    res.flushHeaders();
+    const writeLine = (obj: unknown) => res.write(`${JSON.stringify(obj)}\n`);
+
     // A fresh session's id is minted up front — the runtime continuity key —
     // but the row is only written after a successful exchange.
     const threadId = existing?.id ?? crypto.randomUUID();
     const thread = existing ? await listSessionMessages(existing.id) : [];
-    const result = await runtime.sendMessage({
-      agentId,
-      sessionKey: threadId,
-      message,
-      turn: thread.filter((m) => m.role === "agent").length,
-      history: thread.slice(-CONTEXT_TURNS).map(toChatTurn),
-    });
+    const result = await runtime.sendMessage(
+      {
+        agentId,
+        sessionKey: threadId,
+        message,
+        turn: thread.filter((m) => m.role === "agent").length,
+        history: thread.slice(-CONTEXT_TURNS).map(toChatTurn),
+      },
+      (event) => writeLine({ t: "event", event }),
+    );
 
     if (!result.ok) {
-      const status = result.error === "unknown agent" ? 404 : 409;
-      res.status(status).json(result);
+      writeLine({ t: "result", result });
+      res.end();
       return;
     }
 
@@ -171,6 +184,7 @@ messagesRoutes.post(
       (await createSession(threadId, agentId, userId, sessionTitle(message)));
     await appendExchange(session.id, message, result.blocks);
 
-    res.json({ ...result, session });
+    writeLine({ t: "result", result: { ...result, session } });
+    res.end();
   }),
 );

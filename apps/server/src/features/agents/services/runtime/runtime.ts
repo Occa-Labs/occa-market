@@ -6,7 +6,7 @@
   mock-runtime) and are chosen by the registry.
 */
 
-import type { ChatTurn, RuntimeResult } from "@occa-market/shared";
+import type { ChatRunEvent, ChatTurn, RuntimeResult } from "@occa-market/shared";
 
 export type RuntimeInput = {
   agentId: string;
@@ -19,5 +19,12 @@ export type RuntimeInput = {
 };
 
 export interface AgentRuntime {
-  sendMessage(input: RuntimeInput): Promise<RuntimeResult>;
+  /**
+   * Run one turn. `onEvent` receives live activity (tool use, writing) while
+   * the turn runs — only the gateway runtime emits; fallbacks reply silently.
+   */
+  sendMessage(
+    input: RuntimeInput,
+    onEvent?: (event: ChatRunEvent) => void,
+  ): Promise<RuntimeResult>;
 }

@@ -15,6 +15,7 @@ import type {
   AuthUser,
   ChatHistoryResponse,
   ChatMessage,
+  ChatRunEvent,
   ChatSession,
   ChatSessionListResponse,
   CreateAgentRequest,
@@ -202,17 +203,68 @@ export async function fetchMe(): Promise<AuthUser | null> {
   return data.user;
 }
 
+/**
+ * Send a chat message. The server streams NDJSON — `{t:"event"}` lines feed
+ * `onEvent` (the live activity timeline) as the agent works; the final
+ * `{t:"result"}` line is returned. Pre-run failures (4xx) arrive as plain
+ * JSON and are returned as a failed result.
+ */
 export async function sendMessage(
   id: string,
   body: SendMessageRequest,
+  onEvent?: (event: ChatRunEvent) => void,
 ): Promise<SendMessageResponse> {
   const res = await fetch(`${base}/api/agents/${id}/messages`, {
     method: "POST",
     headers: { "content-type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
-  // The server returns { ok: false, error } with a 4xx on failure — still JSON.
-  return res.json() as Promise<SendMessageResponse>;
+
+  if (res.headers.get("content-type")?.includes("application/json")) {
+    return res.json() as Promise<SendMessageResponse>;
+  }
+  if (!res.body) return { ok: false, error: "stream_failed", reason: "empty response body" };
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let result: SendMessageResponse | null = null;
+
+  const routeLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    try {
+      const parsed = JSON.parse(trimmed) as {
+        t?: string;
+        event?: ChatRunEvent;
+        result?: SendMessageResponse;
+      };
+      if (parsed.t === "event" && parsed.event) onEvent?.(parsed.event);
+      else if (parsed.t === "result" && parsed.result) result = parsed.result;
+    } catch {
+      /* malformed line — skip */
+    }
+  };
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buf.indexOf("\n")) >= 0) {
+      routeLine(buf.slice(0, idx));
+      buf = buf.slice(idx + 1);
+    }
+  }
+  if (buf.trim()) routeLine(buf);
+
+  return (
+    result ?? {
+      ok: false,
+      error: "stream_failed",
+      reason: "the reply stream ended without a result",
+    }
+  );
 }
 
 /** The caller's sessions with an agent, most recently active first. Null when signed out. */

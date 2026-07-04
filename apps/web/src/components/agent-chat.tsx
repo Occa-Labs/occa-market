@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, X } from "lucide-react";
+import { ArrowLeft, Check, Plus, RotateCcw, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ChatStream } from "@/components/chat-stream";
 import { ShareSession } from "@/components/share-session";
 import type {
   ChatMessage,
+  ChatRunEvent,
   ChatSession,
   MarketAgent,
   OutputBlock,
@@ -24,12 +25,46 @@ import { useAuth } from "@/components/auth/auth-provider";
 
 type Message =
   | { role: "user"; text: string }
-  | { role: "agent"; blocks: OutputBlock[] };
+  | { role: "agent"; blocks: OutputBlock[] }
+  // A failed run — client-only (failed exchanges are never persisted).
+  | { role: "error"; human: string; code: string; detail?: string; retryText: string };
 
 function fromStored(m: ChatMessage): Message {
   return m.role === "user"
     ? { role: "user", text: m.text ?? "" }
     : { role: "agent", blocks: m.blocks ?? [] };
+}
+
+/** One row of the live "what is the agent doing" timeline. */
+type ActivityStep = { label: string; state: "running" | "done" | "error" };
+
+/** mcp__dexpaprika__getTokenPools → "dexpaprika · getTokenPools" */
+function prettyTool(name?: string): string {
+  if (!name) return "tool";
+  if (name.startsWith("mcp__")) {
+    const [server, ...rest] = name.slice(5).split("__");
+    return rest.length ? `${server} · ${rest.join("__")}` : server;
+  }
+  return name;
+}
+
+/**
+ * Map a run's machine error code to human copy. The technical detail (stderr
+ * snippet, HTTP status) is shown verbatim alongside — never instead.
+ */
+function humanizeRunError(agentName: string, code: string): string {
+  const map: Record<string, string> = {
+    gateway_unreachable: `${agentName}'s gateway can't be reached right now — the provider's host looks down or unreachable from here.`,
+    gateway_unauthorized: `${agentName}'s gateway refused its stored credentials. The provider needs to reconnect it.`,
+    timeout: `${agentName} took too long on this one, so the run was stopped. Retry, or ask a narrower question.`,
+    network_error: `The connection to ${agentName}'s model dropped mid-run. That's usually transient — retry should work.`,
+    prompt_failed: `${agentName}'s process died on its gateway before it could finish the reply.`,
+    stream_failed: `The reply stream broke before a result arrived.`,
+    "unknown session": `This conversation no longer exists on the server — start a new chat.`,
+    "unknown agent": `This agent no longer exists in the catalog.`,
+    api_unreachable: `The market API can't be reached — is your connection (or the server) up?`,
+  };
+  return map[code] ?? `Something went wrong while running ${agentName}.`;
 }
 
 export function AgentChat({
@@ -47,6 +82,8 @@ export function AgentChat({
   const [input, setInput] = useState("");
   const [credit, setCredit] = useState(config.welcomeCredit);
   const [sending, setSending] = useState(false);
+  // Live activity while a turn runs, fed by the run's event stream.
+  const [activity, setActivity] = useState<ActivityStep[]>([]);
 
   // Dev/admin wallets ride free — no metering, no top-up gate. Client-side
   // courtesy only; the server-side ledger will enforce the same allowlist.
@@ -97,6 +134,34 @@ export function AgentChat({
     if (id === activeId) newChat();
   }
 
+  // Fold one stream event into the activity timeline: a tool starts a running
+  // step, its result completes it, prose between tools shows as writing.
+  function onRunEvent(event: ChatRunEvent) {
+    setActivity((prev) => {
+      const steps = [...prev];
+      const finishRunning = (state: "done" | "error") => {
+        for (let i = steps.length - 1; i >= 0; i--) {
+          if (steps[i].state === "running") {
+            steps[i] = { ...steps[i], state };
+            break;
+          }
+        }
+      };
+      if (event.kind === "tool_use") {
+        finishRunning("done");
+        steps.push({ label: prettyTool(event.toolName), state: "running" });
+      } else if (event.kind === "tool_result") {
+        finishRunning(event.isError ? "error" : "done");
+      } else if (event.kind === "assistant_text") {
+        if (steps[steps.length - 1]?.label !== "writing reply") {
+          finishRunning("done");
+          steps.push({ label: "writing reply", state: "running" });
+        }
+      }
+      return steps;
+    });
+  }
+
   async function send(text: string) {
     const trimmed = text.trim();
     if (!trimmed || broke || sending || status !== "authenticated") return;
@@ -104,12 +169,26 @@ export function AgentChat({
     setMessages((prev) => [...prev, { role: "user", text: trimmed }]);
     setInput("");
     setSending(true);
+    setActivity([]);
+
+    const fail = (code: string, detail?: string) =>
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "error" as const,
+          human: humanizeRunError(agent.name, code),
+          code,
+          detail,
+          retryText: trimmed,
+        },
+      ]);
 
     try {
-      const data = await sendMessage(agent.id, {
-        message: trimmed,
-        sessionId: activeId ?? undefined,
-      });
+      const data = await sendMessage(
+        agent.id,
+        { message: trimmed, sessionId: activeId ?? undefined },
+        onRunEvent,
+      );
 
       if (data.ok) {
         setMessages((prev) => [...prev, { role: "agent", blocks: data.blocks }]);
@@ -126,24 +205,16 @@ export function AgentChat({
           );
         }
       } else {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "agent",
-            blocks: [{ type: "summary", text: "Something went wrong. Try again." }],
-          },
-        ]);
+        fail(data.error, data.reason);
       }
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "agent",
-          blocks: [{ type: "summary", text: "Couldn't reach the agent." }],
-        },
-      ]);
+    } catch (err) {
+      fail(
+        "api_unreachable",
+        err instanceof Error ? err.message : "market API fetch failed",
+      );
     } finally {
       setSending(false);
+      setActivity([]);
     }
   }
 
@@ -285,8 +356,19 @@ export function AgentChat({
                 </p>
               </div>
             )}
-            <ChatStream agent={agent} items={messages} />
-            {sending && <Typing agent={agent} />}
+            {messages.map((m, i) =>
+              m.role === "error" ? (
+                <RunError
+                  key={i}
+                  message={m}
+                  disabled={sending}
+                  onRetry={() => void send(m.retryText)}
+                />
+              ) : (
+                <ChatStream key={i} agent={agent} items={[m]} />
+              ),
+            )}
+            {sending && <Typing agent={agent} activity={activity} />}
           </div>
 
           {/* composer / sign-in gate / top-up gate */}
@@ -363,21 +445,92 @@ export function AgentChat({
   );
 }
 
-function Typing({ agent }: { agent: MarketAgent }) {
+function Typing({
+  agent,
+  activity,
+}: {
+  agent: MarketAgent;
+  activity: ActivityStep[];
+}) {
   return (
-    <div className="flex items-center gap-2.5">
+    <div className="flex items-start gap-2.5">
       <span className="spotlight flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-line text-sm text-fg">
         {agent.glyph}
       </span>
-      <span className="flex gap-1">
-        {[0, 1, 2].map((i) => (
-          <span
-            key={i}
-            className="live-dot h-1.5 w-1.5 rounded-full bg-faint"
-            style={{ animationDelay: `${i * 0.2}s` }}
-          />
-        ))}
-      </span>
+      <div className="min-w-0 pt-1.5">
+        <span className="flex gap-1">
+          {[0, 1, 2].map((i) => (
+            <span
+              key={i}
+              className="live-dot h-1.5 w-1.5 rounded-full bg-faint"
+              style={{ animationDelay: `${i * 0.2}s` }}
+            />
+          ))}
+        </span>
+
+        {/* live activity timeline — what the run is actually doing right now */}
+        {activity.length > 0 && (
+          <ul className="mt-3 flex flex-col gap-1.5">
+            {activity.map((step, i) => (
+              <li
+                key={i}
+                className="flex items-center gap-2 rounded-xl border border-line bg-surface-2 px-3 py-1.5 font-mono text-xs"
+              >
+                {step.state === "running" ? (
+                  <span className="live-dot h-1.5 w-1.5 flex-none rounded-full bg-accent" />
+                ) : step.state === "error" ? (
+                  <TriangleAlert size={11} className="flex-none text-warn" />
+                ) : (
+                  <Check size={11} className="flex-none text-faint" />
+                )}
+                <span className={step.state === "running" ? "text-muted" : "text-faint"}>
+                  {step.label}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
+  );
+}
+
+/*
+  A failed run, inline in the stream: what happened in plain words, the raw
+  machine detail underneath (code · reason, selectable), and a retry.
+*/
+function RunError({
+  message,
+  disabled,
+  onRetry,
+}: {
+  message: { human: string; code: string; detail?: string };
+  disabled: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <Card className="p-4">
+      <div className="flex items-start gap-2.5">
+        <TriangleAlert size={14} className="mt-0.5 flex-none text-warn" />
+        <div className="min-w-0 flex-1">
+          <p className="font-mono text-sm leading-relaxed text-fg">
+            {message.human}
+          </p>
+          <p className="mt-1.5 select-all break-all font-mono text-xs leading-relaxed text-faint">
+            {message.code}
+            {message.detail ? ` · ${message.detail}` : ""}
+          </p>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={onRetry}
+            className="mt-3 inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 font-mono text-xs text-muted transition-colors hover:border-line-strong hover:text-fg disabled:opacity-50"
+          >
+            <RotateCcw size={11} />
+            Retry
+          </button>
+        </div>
+      </div>
+    </Card>
   );
 }

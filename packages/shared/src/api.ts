@@ -79,18 +79,37 @@ export type SharedSessionResponse = {
 
 export type MessageUsage = { costUsd: number };
 
-/** The runtime's return shape (message in, reply blocks out). */
+/**
+ * The runtime's return shape (message in, reply blocks out). On failure,
+ * `error` is a stable machine code (gateway_unreachable, timeout, …) the UI
+ * maps to human copy, and `reason` is the raw technical detail (stderr
+ * snippet, HTTP status) shown alongside it.
+ */
 export type RuntimeResult =
   | { ok: true; blocks: OutputBlock[]; usage: MessageUsage }
-  | { ok: false; error: string };
+  | { ok: false; error: string; reason?: string };
 
 /**
  * POST /api/agents/:id/messages response — the runtime result plus the session
  * the exchange landed in (fresh when the request carried no sessionId).
+ *
+ * The endpoint streams NDJSON: zero or more `{t:"event", event}` lines while
+ * the agent works, then one final `{t:"result", result}` line of this shape.
  */
 export type SendMessageResponse =
   | { ok: true; blocks: OutputBlock[]; usage: MessageUsage; session: ChatSession }
-  | { ok: false; error: string };
+  | { ok: false; error: string; reason?: string };
+
+/**
+ * One live activity event while a turn runs — the chat's "what is the agent
+ * doing" timeline. A trimmed projection of the gateway's stream: tool names
+ * only, never tool inputs/outputs (those are the provider's internals).
+ */
+export type ChatRunEvent = {
+  kind: "assistant_text" | "tool_use" | "tool_result" | "error";
+  toolName?: string;
+  isError?: boolean;
+};
 
 /** GET /api/agents response. */
 export type AgentListResponse = { agents: MarketAgent[] };

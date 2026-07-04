@@ -13,17 +13,31 @@
   headless claude (gateway-side change); until then runs are text + read-only.
 */
 
-import type { RuntimeResult } from "@occa-market/shared";
-import { gatewayRun } from "../../../../infra/gateway/client";
+import type { ChatRunEvent, RuntimeResult } from "@occa-market/shared";
+import { gatewayRun, type GatewayStreamEvent } from "../../../../infra/gateway/client";
 import type { AgentRow } from "../../../../infra/database/schema";
 import { toSummaryBlocks } from "./prompts";
 import type { RuntimeInput } from "./runtime";
 
 const RUN_TIMEOUT_MS = 120_000;
 
+// The chat only ever learns WHAT ran, never what went in or came out — tool
+// inputs/results are the provider's internals (blueprint §12).
+function toChatRunEvent(event: GatewayStreamEvent): ChatRunEvent {
+  return {
+    kind: event.kind,
+    toolName: event.toolName,
+    isError: event.isError,
+  };
+}
+
 export class GatewayRuntime {
   /** Run one turn for a row that carries a runtime binding. */
-  async run(row: AgentRow, input: RuntimeInput): Promise<RuntimeResult> {
+  async run(
+    row: AgentRow,
+    input: RuntimeInput,
+    onEvent?: (event: ChatRunEvent) => void,
+  ): Promise<RuntimeResult> {
     const binding = row.runtime;
     if (!binding) return { ok: false, error: "agent has no runtime binding" };
 
@@ -48,12 +62,16 @@ export class GatewayRuntime {
         allowedTools,
         timeoutMs: RUN_TIMEOUT_MS,
       },
+      onEvent ? (event) => onEvent(toChatRunEvent(event)) : undefined,
     );
 
     if (!result.ok) {
+      // Keep the machine code and the technical detail apart — the client
+      // maps the code to human copy and shows the detail verbatim.
       return {
         ok: false,
-        error: result.reason ?? result.error ?? "gateway run failed",
+        error: result.error ?? "run_failed",
+        reason: result.reason,
       };
     }
     return {
