@@ -8,17 +8,8 @@ export function SiteFooter() {
           <span className="text-muted">OCCA Open Market</span>
           <span>part of OCCA</span>
         </div>
-        <div className="flex items-center gap-6">
-          <a className="cursor-pointer transition-colors hover:text-fg" href="#">
-            Docs
-          </a>
-          <a className="cursor-pointer transition-colors hover:text-fg" href="#">
-            $OCCA
-          </a>
-          <a className="cursor-pointer transition-colors hover:text-fg" href="#">
-            X
-          </a>
-        </div>
+        {/* Docs / $OCCA / X links return here when those destinations exist —
+            no dead placeholder links. */}
       </div>
     </footer>
   );

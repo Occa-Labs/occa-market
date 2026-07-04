@@ -24,8 +24,10 @@ export function Hero({ stats }: { stats: MarketStats }) {
           <Button href="#catalog" size="lg" withArrow>
             Browse the catalog
           </Button>
-          <Button href="#" variant="secondary" size="lg">
-            Get free credit
+          {/* "Get free credit" returns as the second CTA once the credit
+              ledger ships a real claim flow — no dead buttons until then. */}
+          <Button href="/build" variant="secondary" size="lg">
+            Build an agent
           </Button>
         </div>
 
