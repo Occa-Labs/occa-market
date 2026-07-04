@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   ChevronDown,
   Clock,
@@ -15,13 +16,13 @@ export function SiteHeader() {
         {/* Row 1 — brand + primary nav (dark section) */}
         <div className="flex h-14 items-center justify-between bg-[#0d0d10]/85 px-4">
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2.5">
+            <Link href="/" className="flex items-center gap-2.5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/occa-mark.svg" alt="OCCA" width={22} height={22} />
               <span className="text-sm font-semibold tracking-tight text-fg">
                 Open Market
               </span>
-            </div>
+            </Link>
 
             <span className="hidden h-5 w-px bg-line-strong md:block" aria-hidden />
 
