@@ -5,16 +5,10 @@
 
 import { z } from "zod";
 
-export const chatTurnSchema = z.object({
-  role: z.enum(["user", "agent"]),
-  text: z.string(),
-});
-
+// Session key, turn, and history are all derived server-side (auth identity +
+// stored thread) — the client only ever sends the message text.
 export const sendMessageBody = z.object({
   message: z.string().trim().min(1, "message is required"),
-  sessionKey: z.string().optional(),
-  turn: z.number().int().nonnegative().optional(),
-  history: z.array(chatTurnSchema).optional(),
 });
 
 export type SendMessageBody = z.infer<typeof sendMessageBody>;

@@ -11,6 +11,8 @@ import type {
   AgentSkillInput,
   AuthResponse,
   AuthUser,
+  ChatHistoryResponse,
+  ChatMessage,
   CreateAgentRequest,
   GatewayHealthRequest,
   GatewayHealthResponse,
@@ -162,9 +164,20 @@ export async function sendMessage(
 ): Promise<RuntimeResult> {
   const res = await fetch(`${base}/api/agents/${id}/messages`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
   // The server returns { ok: false, error } with a 4xx on failure — still JSON.
   return res.json() as Promise<RuntimeResult>;
+}
+
+/** The caller's stored chat thread with an agent. Null when signed out. */
+export async function getChatHistory(id: string): Promise<ChatMessage[] | null> {
+  const res = await fetch(`${base}/api/agents/${id}/messages`, {
+    headers: authHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as ChatHistoryResponse;
+  return data.messages;
 }

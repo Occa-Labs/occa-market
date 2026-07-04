@@ -23,10 +23,23 @@ export type ChatTurn = { role: "user" | "agent"; text: string };
 /** POST /api/agents/:id/messages body. */
 export type SendMessageRequest = {
   message: string;
-  sessionKey?: string;
-  turn?: number;
-  history?: ChatTurn[];
 };
+
+/**
+ * One persisted chat message. User messages carry `text`; agent replies carry
+ * `blocks`. History is per (user, agent) — the auth token is the identity, so
+ * the client never sends a session key.
+ */
+export type ChatMessage = {
+  id: string;
+  role: "user" | "agent";
+  text?: string;
+  blocks?: OutputBlock[];
+  createdAt: string;
+};
+
+/** GET /api/agents/:id/messages response. */
+export type ChatHistoryResponse = { messages: ChatMessage[] };
 
 export type MessageUsage = { costUsd: number };
 

@@ -9,6 +9,7 @@
 import {
   boolean,
   doublePrecision,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -23,6 +24,7 @@ import type {
   AgentSkillInput,
   AgentStatus,
   AgentToolInput,
+  OutputBlock,
 } from "@occa-market/shared";
 
 /*
@@ -72,3 +74,29 @@ export const agents = pgTable("agents", {
 
 export type AgentRow = typeof agents.$inferSelect;
 export type NewAgentRow = typeof agents.$inferInsert;
+
+/*
+  Chat history — one row per message, one thread per (user, agent). User rows
+  carry `text`, agent rows carry the reply `blocks`. The client-side greeting
+  is never stored.
+*/
+export const chatMessages = pgTable(
+  "chat_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").$type<"user" | "agent">().notNull(),
+    text: text("text"),
+    blocks: jsonb("blocks").$type<OutputBlock[]>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("chat_messages_thread_idx").on(t.agentId, t.userId, t.createdAt)],
+);
+
+export type ChatMessageRow = typeof chatMessages.$inferSelect;
+export type NewChatMessageRow = typeof chatMessages.$inferInsert;

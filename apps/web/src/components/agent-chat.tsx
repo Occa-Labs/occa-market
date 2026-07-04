@@ -1,19 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SampleOutput } from "@/components/sample-output";
-import type { MarketAgent, OutputBlock } from "@occa-market/shared";
-import { sendMessage } from "@/lib/api";
+import type { ChatMessage, MarketAgent, OutputBlock } from "@occa-market/shared";
+import { getChatHistory, sendMessage } from "@/lib/api";
 import { config } from "@/lib/config";
 import { useAuth } from "@/components/auth/auth-provider";
 
 type Message =
   | { role: "user"; text: string }
   | { role: "agent"; blocks: OutputBlock[] };
+
+function fromStored(m: ChatMessage): Message {
+  return m.role === "user"
+    ? { role: "user", text: m.text ?? "" }
+    : { role: "agent", blocks: m.blocks ?? [] };
+}
 
 export function AgentChat({
   agent,
@@ -41,41 +47,37 @@ export function AgentChat({
 
   // Dev/admin wallets ride free — no metering, no top-up gate. Client-side
   // courtesy only; the server-side ledger will enforce the same allowlist.
-  const { user } = useAuth();
+  const { user, status, signIn } = useAuth();
   const unmetered =
     !!user?.walletAddress && config.devWallets.includes(user.walletAddress);
 
+  const signedOut = status === "unauthenticated" || status === "disabled";
   const broke = !unmetered && credit < price;
+
+  // The thread lives server-side, keyed by the signed-in user — pull it once
+  // the session resolves. The greeting is client-only and always leads.
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    let active = true;
+    void getChatHistory(agent.id).then((stored) => {
+      if (!active || !stored?.length) return;
+      setMessages((prev) => [prev[0], ...stored.map(fromStored)]);
+    });
+    return () => {
+      active = false;
+    };
+  }, [status, agent.id]);
 
   async function send(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || broke || sending) return;
-
-    // greeting is agent reply #0; turn cycles the canned variants server-side
-    const turn = messages.filter((m) => m.role === "agent").length - 1;
-    // prior turns as plain text, for model context (skip the greeting)
-    const history = messages.slice(1).map((m) => ({
-      role: m.role,
-      text:
-        m.role === "user"
-          ? m.text
-          : m.blocks
-              .map((b) => (b.type === "summary" ? b.text : ""))
-              .filter(Boolean)
-              .join("\n\n"),
-    }));
+    if (!trimmed || broke || sending || status !== "authenticated") return;
 
     setMessages((prev) => [...prev, { role: "user", text: trimmed }]);
     setInput("");
     setSending(true);
 
     try {
-      const data = await sendMessage(agent.id, {
-        message: trimmed,
-        sessionKey: "demo",
-        turn,
-        history,
-      });
+      const data = await sendMessage(agent.id, { message: trimmed });
 
       if (data.ok) {
         setMessages((prev) => [...prev, { role: "agent", blocks: data.blocks }]);
@@ -124,13 +126,15 @@ export function AgentChat({
           </span>
         </Link>
 
-        <span
-          className={`rounded-full border bg-surface-2 px-3 py-1 font-mono text-xs tabular-nums ${
-            broke ? "border-warn/30 text-warn" : "border-line text-muted"
-          }`}
-        >
-          {unmetered ? "dev · unmetered" : `$${credit.toFixed(2)} credit`}
-        </span>
+        {!signedOut && (
+          <span
+            className={`rounded-full border bg-surface-2 px-3 py-1 font-mono text-xs tabular-nums ${
+              broke ? "border-warn/30 text-warn" : "border-line text-muted"
+            }`}
+          >
+            {unmetered ? "dev · unmetered" : `$${credit.toFixed(2)} credit`}
+          </span>
+        )}
       </div>
 
       {/* message stream */}
@@ -153,9 +157,20 @@ export function AgentChat({
         {sending && <Typing agent={agent} />}
       </div>
 
-      {/* composer / top-up gate */}
+      {/* composer / sign-in gate / top-up gate */}
       <div className="sticky bottom-4 mt-6">
-        {broke ? (
+        {signedOut ? (
+          <Card className="p-5 text-center">
+            <p className="font-mono text-sm text-fg">Sign in to chat</p>
+            <p className="mx-auto mt-1 max-w-sm font-mono text-xs leading-relaxed text-muted">
+              Your conversation with {agent.name} is saved to your account, so
+              you can pick it up anytime.
+            </p>
+            <Button size="md" className="mt-4" onClick={signIn}>
+              Sign in
+            </Button>
+          </Card>
+        ) : broke ? (
           <Card className="p-5 text-center">
             <p className="font-mono text-sm text-fg">Out of free credit</p>
             <p className="mx-auto mt-1 max-w-sm font-mono text-xs leading-relaxed text-muted">
