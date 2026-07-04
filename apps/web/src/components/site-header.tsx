@@ -51,7 +51,7 @@ export function SiteHeader() {
           </div>
 
           <div className="hidden h-full items-center gap-1 sm:flex">
-            <SubNavItem label="My agents" href="/my-agents" small />
+            <SubNavItem label="Dashboard" href="/dashboard" small />
             <SubNavItem label="Build an agent" href="/build" small />
             <span className="mx-2 h-4 w-px bg-line-strong" aria-hidden />
             <SubNavItem label="Waitlist" icon={Sparkles} small />

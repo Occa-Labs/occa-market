@@ -79,9 +79,9 @@ function AccountPill({
                   </>
                 )}
               </Button>
-              <Button variant="secondary" size="sm" href="/my-agents">
+              <Button variant="secondary" size="sm" href="/dashboard">
                 <Bot size={13} className="mr-1.5" />
-                My agents
+                Dashboard
               </Button>
             </div>
           </Popover.Popup>
