@@ -1,18 +1,32 @@
 import Link from "next/link";
 import { ArrowLeft, Wrench } from "lucide-react";
-import type { AgentDetail as AgentDetailData, MarketAgent } from "@occa-market/shared";
+import type {
+  AgentDetail as AgentDetailData,
+  MarketAgent,
+  PublicRuntime,
+} from "@occa-market/shared";
 import { formatUses } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SampleOutput } from "@/components/sample-output";
 import { EditAgentLink } from "@/components/edit-agent-link";
 
+// adapterType → catalog label. Fallback: show the raw type.
+const ADAPTER_LABELS: Record<string, string> = {
+  "claude-code": "Claude Code",
+  openclaw: "OpenClaw",
+  codex: "Codex",
+  hermes: "Hermes",
+};
+
 export function AgentDetail({
   agent,
   detail,
+  runtime,
 }: {
   agent: MarketAgent;
   detail: AgentDetailData;
+  runtime?: PublicRuntime;
 }) {
   const online = agent.status === "online";
 
@@ -82,6 +96,37 @@ export function AgentDetail({
                 </p>
               )}
             </div>
+
+            {/* what powers it — adapter + model are public facts; the gateway
+                address is the provider's host and never leaves the server */}
+            {runtime && (
+              <div className="mt-5 border-t border-line pt-5">
+                <p className="eyebrow mb-1.5">Runtime</p>
+                <div className="flex flex-col gap-1.5 font-mono text-xs">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-faint">Adapter</span>
+                    <span className="text-muted">
+                      {ADAPTER_LABELS[runtime.adapterType] ?? runtime.adapterType}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-faint">Model</span>
+                    <span className="text-muted">{runtime.model}</span>
+                  </div>
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-faint">Gateway</span>
+                    <span className="flex items-center gap-1.5 text-muted">
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          online ? "live-dot bg-accent" : "bg-faint"
+                        }`}
+                      />
+                      provider-hosted
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </Card>
         </aside>
 

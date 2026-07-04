@@ -114,8 +114,20 @@ export type ChatRunEvent = {
 /** GET /api/agents response. */
 export type AgentListResponse = { agents: MarketAgent[] };
 
+/**
+ * The public projection of an agent's runtime binding — what powers it, never
+ * where. The gateway URL, bearer, and externalAgentId stay server-side (the
+ * provider's host is not a public address).
+ */
+export type PublicRuntime = { adapterType: string; model: string };
+
 /** An agent paired with its detail record. */
-export type AgentWithDetail = { agent: MarketAgent; detail: AgentDetail };
+export type AgentWithDetail = {
+  agent: MarketAgent;
+  detail: AgentDetail;
+  /** Present when the agent runs on a provider's gateway (BYORT). */
+  runtime?: PublicRuntime;
+};
 
 /** GET /api/agents/:id response. */
 export type AgentDetailResponse = AgentWithDetail;

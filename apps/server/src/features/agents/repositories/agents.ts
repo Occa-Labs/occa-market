@@ -57,9 +57,16 @@ export async function getAgentWithDetail(
   id: string,
 ): Promise<AgentWithDetail | null> {
   const [row] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
-  return row
-    ? { agent: toMarketAgent(row), detail: normalizeDetail(row.detail) }
-    : null;
+  if (!row) return null;
+  return {
+    agent: toMarketAgent(row),
+    detail: normalizeDetail(row.detail),
+    // Public runtime facts only — what powers the agent, never where it
+    // lives. URL/bearer/externalAgentId stay internal.
+    runtime: row.runtime
+      ? { adapterType: row.runtime.adapterType, model: row.runtime.model }
+      : undefined,
+  };
 }
 
 /**

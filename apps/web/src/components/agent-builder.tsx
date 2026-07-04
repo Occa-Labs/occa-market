@@ -587,13 +587,16 @@ function GatewayStep({ draft, update }: { draft: DraftAgent; update: Update }) {
               key={a.type}
               type="button"
               aria-pressed={selected}
-              onClick={() =>
+              onClick={() => {
+                // Re-clicking the selected adapter is a no-op — it must not
+                // silently reset a chosen model back to the default.
+                if (selected) return;
                 update({
                   adapterType: a.type as AdapterType,
                   model: a.defaultModel,
                   connection: "idle",
-                })
-              }
+                });
+              }}
               className={`rounded-xl border p-3.5 text-left transition-colors ${
                 selected
                   ? "border-accent bg-surface-2"

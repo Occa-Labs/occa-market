@@ -33,7 +33,11 @@ export default async function AgentPage({
     <div className="min-h-screen">
       <SiteHeader />
       <main>
-        <AgentDetail agent={record.agent} detail={record.detail} />
+        <AgentDetail
+          agent={record.agent}
+          detail={record.detail}
+          runtime={record.runtime}
+        />
       </main>
       <SiteFooter />
     </div>
