@@ -119,6 +119,52 @@ export async function getLatestAnchor(
   return row ?? null;
 }
 
+export type DayHistoryEntry = {
+  dayUnix: number;
+  taskCount: number;
+  anchored: boolean;
+  txSig?: string;
+};
+
+/**
+ * Per-day run history, newest first — every UTC day that holds agent
+ * replies, whether its anchor is committed yet or not. Pending days (the
+ * still-open UTC day, or a sweep that hasn't run) come straight from
+ * chat_messages, so a run is visible the moment it lands in the DB.
+ */
+export async function listDayHistory(
+  agentId: string,
+  limit = 14,
+): Promise<DayHistoryEntry[]> {
+  const dayExpr = sql<number>`(floor(extract(epoch from ${chatMessages.createdAt}) / 86400) * 86400)::bigint`;
+  const days = await db
+    .select({ day: dayExpr, runs: sql<number>`count(*)::int` })
+    .from(chatMessages)
+    .innerJoin(chatSessions, eq(chatMessages.sessionId, chatSessions.id))
+    .where(and(eq(chatSessions.agentId, agentId), eq(chatMessages.role, "agent")))
+    .groupBy(dayExpr)
+    .orderBy(desc(dayExpr))
+    .limit(limit);
+
+  const anchors = await db
+    .select()
+    .from(dailyAnchors)
+    .where(eq(dailyAnchors.agentId, agentId));
+  const byDay = new Map(anchors.map((a) => [Number(a.dayUnix), a]));
+
+  return days.map((d) => {
+    const anchor = byDay.get(Number(d.day));
+    return {
+      dayUnix: Number(d.day),
+      // The committed count wins once anchored — deletions after the fact
+      // can shrink the live count, the on-chain number is what was locked.
+      taskCount: anchor ? anchor.taskCount : d.runs,
+      anchored: Boolean(anchor),
+      txSig: anchor?.txSig,
+    };
+  });
+}
+
 export async function countAnchors(agentId: string): Promise<number> {
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })

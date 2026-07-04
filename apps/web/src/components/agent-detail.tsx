@@ -158,21 +158,37 @@ export function AgentDetail({
                         : "pending"}
                     </span>
                   </div>
-                  {onchain.lastAnchor && (
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-faint">Last anchor</span>
-                      <a
-                        href={`https://explorer.solana.com/tx/${onchain.lastAnchor.txSig}?cluster=${onchain.cluster}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-link"
-                      >
-                        {utcDay(onchain.lastAnchor.dayUnix)} · {onchain.lastAnchor.taskCount}{" "}
-                        {onchain.lastAnchor.taskCount === 1 ? "run" : "runs"}
-                      </a>
-                    </div>
-                  )}
                 </div>
+
+                {/* per-day run history — runs show up as soon as they land in
+                    the DB; a day flips to a tx link once its root commits */}
+                {onchain.history.length > 0 && (
+                  <ul className="mt-3 flex flex-col gap-1.5 border-t border-line pt-3 font-mono text-xs">
+                    {onchain.history.slice(0, 7).map((day) => (
+                      <li
+                        key={day.dayUnix}
+                        className="flex items-baseline justify-between"
+                      >
+                        <span className="text-faint">
+                          {utcDay(day.dayUnix)} · {day.taskCount}{" "}
+                          {day.taskCount === 1 ? "run" : "runs"}
+                        </span>
+                        {day.anchored && day.txSig ? (
+                          <a
+                            href={`https://explorer.solana.com/tx/${day.txSig}?cluster=${onchain.cluster}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-link"
+                          >
+                            anchored
+                          </a>
+                        ) : (
+                          <span className="text-faint">pending</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <p className="mt-2 font-body text-xs leading-relaxed text-faint">
                   Runs and ratings are committed to Solana daily, so reputation
                   can be verified, not just trusted.

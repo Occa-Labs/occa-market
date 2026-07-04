@@ -20,7 +20,7 @@ import {
 } from "../../../infra/database/schema";
 import { onchainCluster } from "../../../infra/onchain/client";
 import { toMarketAgent } from "../domain/dtos";
-import { countAnchors, getLatestAnchor } from "./anchors";
+import { countAnchors, getLatestAnchor, listDayHistory } from "./anchors";
 
 /*
   Rows written before the workflow rework store steps as plain strings; the
@@ -73,9 +73,10 @@ export async function getAgentWithDetail(
   // mirror (no RPC on the read path — the chain stays the audit trail).
   let onchain: AgentOnchain | undefined;
   if (row.onchain) {
-    const [last, anchoredDays] = await Promise.all([
+    const [last, anchoredDays, history] = await Promise.all([
       getLatestAnchor(row.id),
       countAnchors(row.id),
+      listDayHistory(row.id),
     ]);
     onchain = {
       identityPda: row.onchain.identityPda,
@@ -90,6 +91,7 @@ export async function getAgentWithDetail(
             txSig: last.txSig,
           }
         : undefined,
+      history,
     };
   }
   return {

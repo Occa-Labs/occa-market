@@ -149,6 +149,20 @@ export type OnchainAnchor = {
 };
 
 /**
+ * One UTC day of run history. Runs land here (from the DB) the moment they
+ * happen; `anchored` flips once the day closes and its Merkle root is
+ * committed on-chain — until then the day reads as pending.
+ */
+export type OnchainDayStatus = {
+  /** UTC midnight of the day, unix seconds. */
+  dayUnix: number;
+  taskCount: number;
+  anchored: boolean;
+  /** Commit transaction, present once anchored. */
+  txSig?: string;
+};
+
+/**
  * The agent's on-chain footprint: AgentIdentity + Deployment PDAs under the
  * "OCCA Market" company on the OCCA registry program. Usage + ratings — the
  * reputation inputs — are committed as one Merkle root per UTC day, so the
@@ -161,6 +175,8 @@ export type AgentOnchain = {
   cluster: string;
   anchoredDays: number;
   lastAnchor?: OnchainAnchor;
+  /** Recent run days, newest first — anchored and still-pending alike. */
+  history: OnchainDayStatus[];
 };
 
 /** An agent paired with its detail record. */
