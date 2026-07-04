@@ -9,3 +9,10 @@ dist/
 !.env.example
 next-env.d.ts
 *.tsbuildinfo
+
+# Internal docs & Claude workspace config — kept local, not for the public repo
+CLAUDE.md
+.claude/
+agent-marketplace-blueprint.md
+agent-marketplace-token.md
+demo-agent-degen-scout.md
