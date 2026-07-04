@@ -40,19 +40,9 @@ export function AgentChat({
 }) {
   const price = agent.pricePerMsg;
 
-  const greeting: Message = {
-    role: "agent",
-    blocks: [
-      {
-        type: "summary",
-        text: `Hey, I'm ${agent.name}. ${agent.tagline} Ask me anything to get started.`,
-      },
-    ],
-  };
-
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([greeting]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [credit, setCredit] = useState(config.welcomeCredit);
   const [sending, setSending] = useState(false);
@@ -78,26 +68,25 @@ export function AgentChat({
       const thread = await getSessionMessages(agent.id, stored[0].id);
       if (!active || !thread) return;
       setActiveId(stored[0].id);
-      setMessages([greeting, ...thread.map(fromStored)]);
+      setMessages(thread.map(fromStored));
     });
     return () => {
       active = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, agent.id]);
 
   async function openSession(id: string) {
     if (id === activeId || sending) return;
     setActiveId(id);
-    setMessages([greeting]);
+    setMessages([]);
     const thread = await getSessionMessages(agent.id, id);
-    if (thread) setMessages([greeting, ...thread.map(fromStored)]);
+    if (thread) setMessages(thread.map(fromStored));
   }
 
   function newChat() {
     if (sending) return;
     setActiveId(null);
-    setMessages([greeting]);
+    setMessages([]);
   }
 
   async function removeSession(id: string) {
@@ -269,6 +258,16 @@ export function AgentChat({
 
           {/* message stream */}
           <div className="flex flex-col gap-4">
+            {messages.length === 0 && !sending && (
+              <div className="flex flex-col items-center gap-3 py-16 text-center">
+                <span className="spotlight flex h-12 w-12 items-center justify-center rounded-2xl border border-line text-xl text-fg">
+                  {agent.glyph}
+                </span>
+                <p className="max-w-sm font-mono text-xs leading-relaxed text-faint">
+                  {agent.tagline}
+                </p>
+              </div>
+            )}
             {messages.map((m, i) =>
               m.role === "user" ? (
                 <div key={i} className="flex justify-end">
