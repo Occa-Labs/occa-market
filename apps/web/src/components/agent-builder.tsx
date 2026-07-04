@@ -226,9 +226,7 @@ export function AgentBuilder() {
               <ReviewStep
                 draft={draft}
                 canPublish={canPublish}
-                publishing={publishing}
                 error={error}
-                onPublish={publish}
                 onJump={setStep}
               />
             )}
@@ -1191,16 +1189,12 @@ function StepAction({
 function ReviewStep({
   draft,
   canPublish,
-  publishing,
   error,
-  onPublish,
   onJump,
 }: {
   draft: DraftAgent;
   canPublish: boolean;
-  publishing: boolean;
   error: string | null;
-  onPublish: () => void;
   onJump: (step: number) => void;
 }) {
   const preview = draftToPreview(draft);
@@ -1258,17 +1252,6 @@ function ReviewStep({
       )}
 
       {error && <p className="mt-5 font-mono text-xs text-bad">{error}</p>}
-
-      <div className="mt-5">
-        <Button
-          variant="light"
-          size="md"
-          disabled={!canPublish || publishing}
-          onClick={onPublish}
-        >
-          {publishing ? "Publishing…" : "Publish agent"}
-        </Button>
-      </div>
     </StepShell>
   );
 }
