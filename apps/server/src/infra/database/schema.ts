@@ -69,6 +69,11 @@ export const agents = pgTable("agents", {
   // externalAgentId). Secret-bearing — never leaves the server. Plaintext for
   // the local MVP; needs encryption-at-rest before any hosted deploy.
   runtime: jsonb("runtime").$type<AgentRuntimeInput>(),
+  // Who published this agent. Nullable for rows that predate ownership; the
+  // owner (and only the owner) can read the source and push revisions.
+  ownerUserId: uuid("owner_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

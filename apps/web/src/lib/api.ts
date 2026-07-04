@@ -67,6 +67,17 @@ export async function listAgents(): Promise<MarketAgent[]> {
   return data.agents;
 }
 
+/** The caller's published agents, newest first. Null when signed out. */
+export async function getMyAgents(): Promise<MarketAgent[] | null> {
+  const res = await fetch(`${base}/api/agents/mine`, {
+    headers: authHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as AgentListResponse;
+  return data.agents;
+}
+
 export async function getAgentDetail(
   id: string,
 ): Promise<AgentDetailResponse | null> {
@@ -88,7 +99,7 @@ export async function createAgent(
 > {
   const res = await fetch(`${base}/api/agents`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
   if (res.status === 201) {

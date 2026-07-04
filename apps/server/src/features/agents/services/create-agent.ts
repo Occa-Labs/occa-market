@@ -80,7 +80,10 @@ export function buildDetail(input: UpdateAgentBody): AgentDetail {
   };
 }
 
-export async function publishAgent(input: CreateAgentBody): Promise<PublishResult> {
+export async function publishAgent(
+  input: CreateAgentBody,
+  ownerUserId: string,
+): Promise<PublishResult> {
   const id = slugify(input.handle);
   if (!id) return { ok: false, error: "handle must contain letters or numbers" };
   if (await agentExists(id)) return { ok: false, error: "handle already taken" };
@@ -107,6 +110,8 @@ export async function publishAgent(input: CreateAgentBody): Promise<PublishResul
     toolConfigs: input.tools,
     // Internal BYORT binding — where this agent runs.
     runtime: input.runtime,
+    // The publisher — the one identity allowed to read source and revise.
+    ownerUserId,
   };
 
   const agent = await insertAgent(row);

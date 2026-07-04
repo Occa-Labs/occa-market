@@ -3,8 +3,9 @@
   repository or service, project to the wire shape, respond. No data access
   logic lives here. Async handlers are wrapped so DB errors become a clean 500.
 
-  Source/update are auth-gated but not yet owner-scoped — agents don't carry
-  an owner column. Fine for the local MVP; ownership lands with the ledger.
+  Ownership: publishing stamps the caller as owner; source/update/mine are
+  owner-scoped. Rows that predate the owner column (owner null) stay editable
+  by any signed-in user until claimed.
 */
 
 import { Router } from "express";
@@ -16,7 +17,12 @@ import type {
 } from "@occa-market/shared";
 import { asyncHandler } from "../../../lib/async-handler";
 import { requireAuth } from "../../../middleware/auth";
-import { getAgentRow, getAgentWithDetail, listAgents } from "../repositories/agents";
+import {
+  getAgentRow,
+  getAgentWithDetail,
+  listAgents,
+  listAgentsByOwner,
+} from "../repositories/agents";
 import { createAgentBody, updateAgentBody } from "../domain/schemas";
 import { publishAgent } from "../services/create-agent";
 import { reviseAgent } from "../services/update-agent";
@@ -32,9 +38,23 @@ agentsRoutes.get(
   }),
 );
 
+// GET /api/agents/mine — the caller's published agents. Registered before
+// /:id so "mine" never resolves as an agent id.
+agentsRoutes.get(
+  "/mine",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const body: AgentListResponse = {
+      agents: await listAgentsByOwner(req.user!.userId),
+    };
+    res.json(body);
+  }),
+);
+
 // POST /api/agents — publish a new agent from the build wizard.
 agentsRoutes.post(
   "/",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const parsed = createAgentBody.safeParse(req.body);
     if (!parsed.success) {
@@ -43,7 +63,7 @@ agentsRoutes.post(
       return;
     }
 
-    const result = await publishAgent(parsed.data);
+    const result = await publishAgent(parsed.data, req.user!.userId);
     if (!result.ok) {
       res.status(409).json(result);
       return;
@@ -68,6 +88,10 @@ agentsRoutes.get(
     const row = await getAgentRow(req.params.id);
     if (!row) {
       res.status(404).json({ error: "not found" });
+      return;
+    }
+    if (row.ownerUserId && row.ownerUserId !== req.user!.userId) {
+      res.status(403).json({ error: "not your agent" });
       return;
     }
     const body: AgentSourceResponse = {
@@ -105,6 +129,14 @@ agentsRoutes.put(
   "/:id",
   requireAuth,
   asyncHandler(async (req, res) => {
+    // Ownership first — a non-owner learns nothing, not even whether the
+    // body would have validated.
+    const row = await getAgentRow(req.params.id);
+    if (row && row.ownerUserId && row.ownerUserId !== req.user!.userId) {
+      res.status(403).json({ ok: false, error: "not your agent" });
+      return;
+    }
+
     const parsed = updateAgentBody.safeParse(req.body);
     if (!parsed.success) {
       const error = parsed.error.issues[0]?.message ?? "invalid body";

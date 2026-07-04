@@ -85,6 +85,16 @@ export async function insertAgent(row: NewAgentRow): Promise<MarketAgent> {
   return toMarketAgent(created);
 }
 
+/** The agents a user has published, newest first. */
+export async function listAgentsByOwner(userId: string): Promise<MarketAgent[]> {
+  const rows = await db
+    .select()
+    .from(agents)
+    .where(eq(agents.ownerUserId, userId))
+    .orderBy(desc(agents.createdAt));
+  return rows.map(toMarketAgent);
+}
+
 /** Apply a revision to an existing agent; null when the id is unknown. */
 export async function updateAgentRow(
   id: string,

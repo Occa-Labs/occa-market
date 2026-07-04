@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Popover } from "@base-ui/react/popover";
-import { Check, Copy, LogOut } from "lucide-react";
+import { Bot, Check, Copy, LogOut } from "lucide-react";
 import { LiquidMetalButton } from "@/components/ui/liquid-metal-button";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth/auth-provider";
@@ -65,7 +65,7 @@ function AccountPill({
                 Signed in as <span className="text-muted">{maskEmail(email)}</span>
               </p>
             )}
-            <div className="mt-3">
+            <div className="mt-3 flex items-center gap-2">
               <Button variant="secondary" size="sm" onClick={copy}>
                 {copied ? (
                   <>
@@ -78,6 +78,10 @@ function AccountPill({
                     Copy address
                   </>
                 )}
+              </Button>
+              <Button variant="secondary" size="sm" href="/my-agents">
+                <Bot size={13} className="mr-1.5" />
+                My agents
               </Button>
             </div>
           </Popover.Popup>
