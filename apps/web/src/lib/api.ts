@@ -19,6 +19,8 @@ import type {
   ChatSession,
   ChatSessionListResponse,
   CreateAgentRequest,
+  CreditsSummary,
+  DepositResponse,
   GatewayHealthRequest,
   GatewayHealthResponse,
   HistoryResponse,
@@ -245,6 +247,28 @@ export async function refreshTokenStanding(): Promise<TokenStanding | null> {
   if (!res.ok) return null;
   const data = (await res.json()) as TokenStandingResponse;
   return data.standing;
+}
+
+/** The caller's credit balance, recent ledger, and deposit instructions. */
+export async function getCredits(): Promise<CreditsSummary | null> {
+  const res = await fetch(`${base}/api/credits`, {
+    headers: authHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  return res.json() as Promise<CreditsSummary>;
+}
+
+/** Submit a USDC transfer's tx signature for verification + crediting. */
+export async function depositCredits(signature: string): Promise<DepositResponse> {
+  const res = await fetch(`${base}/api/credits/deposit`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ signature }),
+  });
+  const data = (await res.json().catch(() => null)) as DepositResponse | null;
+  if (data) return data;
+  return { ok: false, error: `deposit failed (HTTP ${res.status})` };
 }
 
 /**

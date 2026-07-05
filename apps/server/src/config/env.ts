@@ -69,6 +69,12 @@ const envSchema = z.object({
   TOKEN_CACHE_TTL_MS: opt(z.coerce.number().int().positive().default(600_000)),
   // Dev/admin wallets (CSV): unmetered, bypass hold + budget gates.
   DEV_WALLETS: opt(z.string().default("")),
+  // Paid-usage credits (USDC, mainnet — same RPC as the token block).
+  // Deposits only activate once the market's receiving wallet is set.
+  DEPOSIT_WALLET: opt(z.string().min(32).optional()),
+  USDC_MINT: opt(
+    z.string().min(32).default("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
+  ),
 });
 
 function loadEnv() {
@@ -111,6 +117,11 @@ function loadEnv() {
       totalSupply: e.TOKEN_TOTAL_SUPPLY,
       cacheTtlMs: e.TOKEN_CACHE_TTL_MS,
       devWallets: csv(e.DEV_WALLETS),
+    },
+    credits: {
+      depositWallet: e.DEPOSIT_WALLET ?? null,
+      usdcMint: e.USDC_MINT,
+      enabled: Boolean(e.DEPOSIT_WALLET),
     },
   } as const;
 }

@@ -9,25 +9,43 @@
 */
 
 import { useState } from "react";
-import { Check, Coins, Copy, LogOut, Settings as SettingsIcon } from "lucide-react";
+import {
+  Check,
+  Coins,
+  Copy,
+  LogOut,
+  Settings as SettingsIcon,
+  Wallet,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { config } from "@/lib/config";
 import { formatResetDay, formatTokens } from "@/lib/format";
+import { depositCredits } from "@/lib/api";
 import { useAuth } from "@/components/auth/auth-provider";
 import { TierBadge } from "@/components/token/tier-badge";
 import { useTokenStanding } from "@/components/token/use-token-standing";
+import { useCredits } from "@/components/credits/use-credits";
 
-type SectionKey = "account" | "standing";
+type SectionKey = "account" | "credits" | "standing";
 
 const NAV_GROUPS: {
   label: string;
   labelClass?: string;
-  items: { key: SectionKey; label: string; icon: typeof SettingsIcon }[];
+  items: {
+    key: SectionKey;
+    label: string;
+    icon: typeof SettingsIcon;
+    /** Visible but in development — rendered with a "soon" pill. */
+    soon?: boolean;
+  }[];
 }[] = [
   {
     label: "Account",
-    items: [{ key: "account", label: "Settings", icon: SettingsIcon }],
+    items: [
+      { key: "account", label: "Settings", icon: SettingsIcon },
+      { key: "credits", label: "Credits", icon: Wallet, soon: true },
+    ],
   },
   {
     label: "$OCCA",
@@ -38,14 +56,27 @@ const NAV_GROUPS: {
 
 const SECTION_TITLES: Record<SectionKey, string> = {
   account: "Settings",
+  credits: "Credits",
   standing: "Holder standing",
 };
+
+/** Signed ledger amount for display: +$5.00 / −$0.22. */
+function formatSignedUsd(v: number): string {
+  const abs = Math.abs(v).toFixed(2);
+  return v < 0 ? `−$${abs}` : `+$${abs}`;
+}
 
 export function AccountSettings() {
   const { user, status, signIn, signOut } = useAuth();
   const { standing, refresh, refreshing } = useTokenStanding();
+  const { credits, setCredits } = useCredits();
   const [copied, setCopied] = useState(false);
   const [active, setActive] = useState<SectionKey>("account");
+  const [depositSig, setDepositSig] = useState("");
+  const [depositing, setDepositing] = useState(false);
+  const [depositNote, setDepositNote] = useState<
+    { ok: boolean; text: string } | null
+  >(null);
 
   if (status === "unauthenticated" || status === "disabled") {
     return (
@@ -80,6 +111,28 @@ export function AccountSettings() {
       setTimeout(() => setCopied(false), 1500);
     } catch {
       /* clipboard blocked — selecting the address still works */
+    }
+  }
+
+  async function submitDeposit() {
+    const signature = depositSig.trim();
+    if (!signature || depositing) return;
+    setDepositing(true);
+    setDepositNote(null);
+    try {
+      const res = await depositCredits(signature);
+      if (res.ok) {
+        setCredits(res.summary);
+        setDepositSig("");
+        setDepositNote({
+          ok: true,
+          text: `Credited $${res.creditedUsd.toFixed(2)} USDC.`,
+        });
+      } else {
+        setDepositNote({ ok: false, text: res.error });
+      }
+    } finally {
+      setDepositing(false);
     }
   }
 
@@ -247,6 +300,101 @@ export function AccountSettings() {
     </Card>
   );
 
+  const creditsSection = (
+    <Card className="p-2">
+      <div className="flex items-center justify-between gap-3 px-5 pt-4">
+        <h3 className="flex items-center gap-2.5 text-base font-semibold tracking-tight text-fg">
+          Credit balance
+          <span className="rounded-full border border-line bg-surface-2 px-2.5 py-0.5 font-mono text-[0.65rem] uppercase tracking-[0.14em] text-muted">
+            coming soon
+          </span>
+        </h3>
+        <span className="font-mono text-sm text-fg">
+          ${(credits?.balanceUsd ?? 0).toFixed(2)}
+          <span className="ml-1 text-xs text-faint">USDC</span>
+        </span>
+      </div>
+      <p className="px-5 pb-4 pt-1 font-body text-[13px] leading-relaxed text-muted">
+        Paid messages are in development. Once live, they&apos;ll pay for
+        chatting past your free budget — the agent&apos;s listed price plus
+        the platform fee, with your holder tier discounting that fee.
+      </p>
+
+      <div className="divide-y divide-line rounded-xl border border-line bg-surface-2/50">
+        <div className="p-6">
+          <p className="text-[15px] font-semibold text-fg">Fund with USDC</p>
+          <p className="mt-1 font-body text-[13px] leading-relaxed text-muted">
+            {credits?.depositWallet
+              ? "Send USDC from your linked wallet to the market's deposit address, then paste the transaction signature below. The transfer is verified on-chain before it's credited."
+              : "Funding opens with the payments launch — your USDC will stay in a wallet you own, and messages will draw from it with no pop-up per message."}
+          </p>
+          <div className="mt-3 flex max-w-lg items-center gap-2 rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5">
+            <p className="min-w-0 flex-1 select-all break-all font-mono text-xs text-faint">
+              {credits?.depositWallet ?? "Funding address appears here at launch"}
+            </p>
+          </div>
+          <div className="mt-3 flex max-w-lg items-center gap-2">
+            <input
+              value={depositSig}
+              onChange={(e) => setDepositSig(e.target.value)}
+              placeholder="Transaction signature…"
+              disabled={!credits?.depositWallet}
+              className="h-9 min-w-0 flex-1 rounded-xl border border-line bg-surface-2 px-3 font-mono text-xs text-fg placeholder:text-faint focus:border-line-strong focus:outline-none disabled:opacity-50"
+            />
+            <Button
+              size="sm"
+              disabled={!credits?.depositWallet || depositing || !depositSig.trim()}
+              onClick={() => void submitDeposit()}
+            >
+              {depositing ? "Verifying…" : "Verify"}
+            </Button>
+          </div>
+          {depositNote && (
+            <p
+              className={`mt-2 font-body text-xs ${depositNote.ok ? "text-fg" : "text-bad"}`}
+            >
+              {depositNote.text}
+            </p>
+          )}
+        </div>
+
+        <div className="p-6">
+          <p className="text-[15px] font-semibold text-fg">Recent activity</p>
+          {!credits || credits.entries.length === 0 ? (
+            <p className="mt-2 font-body text-xs text-faint">
+              No deposits or charges yet.
+            </p>
+          ) : (
+            <div className="mt-3 flex flex-col gap-2">
+              {credits.entries.map((e) => (
+                <div
+                  key={e.id}
+                  className="flex items-center justify-between gap-3 font-mono text-xs"
+                >
+                  <span className="text-muted">
+                    {e.kind}
+                    {e.agentId ? ` · ${e.agentId}` : ""}
+                  </span>
+                  <span className="flex items-center gap-3">
+                    <span className={e.amountUsd < 0 ? "text-muted" : "text-fg"}>
+                      {formatSignedUsd(e.amountUsd)}
+                    </span>
+                    <span className="text-faint">
+                      {new Date(e.createdAt).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+
   return (
     <div className="grid gap-10 lg:grid-cols-[250px_minmax(0,1fr)]">
       {/* section nav — grouped like Clerk's Workspace / Billing sidebar */}
@@ -273,6 +421,11 @@ export function AccountSettings() {
                   >
                     <item.icon size={16} className="shrink-0 text-faint" />
                     {item.label}
+                    {item.soon && (
+                      <span className="ml-auto rounded-full border border-line bg-surface-2 px-2 py-0.5 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-faint">
+                        soon
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -296,6 +449,11 @@ export function AccountSettings() {
               }`}
             >
               {item.label}
+              {item.soon && (
+                <span className="ml-1.5 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-faint">
+                  soon
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -307,7 +465,11 @@ export function AccountSettings() {
         </div>
 
         <div className="mt-10 flex flex-col gap-8">
-          {active === "account" ? accountSection : standingSection}
+          {active === "account"
+            ? accountSection
+            : active === "credits"
+              ? creditsSection
+              : standingSection}
         </div>
       </div>
     </div>

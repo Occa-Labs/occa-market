@@ -123,6 +123,11 @@ export type SendMessageResponse =
       session: ChatSession;
       /** The stored agent reply's id — the handle for rating it. */
       messageId: string;
+      /**
+       * Present when this message ran PAID (free budget dry, charged to the
+       * credit balance) — what was charged and the balance after.
+       */
+      charge?: { priceUsd: number; feeUsd: number; balanceUsd: number };
     }
   | {
       ok: false;
@@ -136,7 +141,39 @@ export type SendMessageResponse =
        * a second fetch.
        */
       standing?: TokenStanding;
+      /** On budget_exhausted: the credit balance, so the UI can pitch top-up. */
+      balanceUsd?: number;
     };
+
+/*
+  Credits — the custodial USDC ledger behind paid messages. Deposits are
+  verified on-chain (the user submits the transfer's tx signature); charges
+  land per delivered paid message. Amounts on the wire are USD floats for
+  display; the server's ledger keeps integer micro-USD.
+*/
+export type CreditEntryKind = "deposit" | "charge" | "refund";
+
+export type CreditEntry = {
+  id: string;
+  kind: CreditEntryKind;
+  /** Signed USD amount — deposits positive, charges negative. */
+  amountUsd: number;
+  agentId: string | null;
+  txSignature: string | null;
+  createdAt: string;
+};
+
+export type CreditsSummary = {
+  balanceUsd: number;
+  entries: CreditEntry[];
+  /** Where to send USDC. Null = deposits not configured on this server. */
+  depositWallet: string | null;
+  usdcMint: string;
+};
+
+export type DepositResponse =
+  | { ok: true; creditedUsd: number; summary: CreditsSummary }
+  | { ok: false; error: string };
 
 /**
  * One live activity event while a turn runs — the chat's "what is the agent

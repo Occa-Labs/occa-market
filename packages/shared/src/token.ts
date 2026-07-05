@@ -42,6 +42,33 @@ export const MEMBERSHIP_PCT = 0.0005;
 export const TRIAL_DAILY_BUDGET = 3;
 export const TRIAL_WEEKLY_BUDGET = 10;
 
+/*
+  Paid usage (blueprint §5, revised 2026-07-06): the platform fee rides ON TOP
+  of the listed price and is paid by the consumer — the provider always
+  receives their listed price in full. Holder tiers discount the fee, never
+  the provider's cut. Money math runs in integer micro-USD (USDC's 6
+  decimals) so ledger rows never see floats.
+*/
+export const PLATFORM_FEE_PCT = 0.1;
+
+/** Fee in micro-USD for a price at a holder's fee discount. */
+export function feeMicros(priceMicros: number, feeDiscount: number): number {
+  return Math.round(priceMicros * PLATFORM_FEE_PCT * (1 - feeDiscount));
+}
+
+/** What a paid message costs the consumer, in micro-USD (price + fee). */
+export function paidCostMicros(priceMicros: number, feeDiscount: number): number {
+  return priceMicros + feeMicros(priceMicros, feeDiscount);
+}
+
+export function usdToMicros(usd: number): number {
+  return Math.round(usd * 1_000_000);
+}
+
+export function microsToUsd(micros: number): number {
+  return micros / 1_000_000;
+}
+
 export function tierSpec(tier: HolderTier): TierSpec | null {
   return TIER_SPECS.find((s) => s.tier === tier) ?? null;
 }

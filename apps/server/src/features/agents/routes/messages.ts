@@ -22,7 +22,10 @@ import {
 } from "../repositories/messages";
 import { recordUsage } from "../../token/repositories/usage";
 import { checkMessageGate } from "../../token/services/standing";
+import { balanceMicros, insertCharge } from "../../credits/repositories/ledger";
+import { getAgentRow } from "../repositories/agents";
 import { runtime } from "../services/runtime/registry";
+import { feeMicros, microsToUsd, usdToMicros } from "@occa-market/shared";
 
 export const messagesRoutes = Router();
 
@@ -152,13 +155,40 @@ messagesRoutes.post(
       return;
     }
 
-    // Holder gate (token doc §4/§6): membership line, then weekly budget.
-    // Pre-run, so it responds as plain JSON like the other pre-run failures;
-    // the standing rides along so the client renders the right card directly.
+    // Holder gate (token doc §4/§6): daily allowance, then weekly budget.
+    // A dry budget falls through to the PAID path when the credit balance
+    // covers this agent's price + fee (blueprint §5: fee rides on top, the
+    // provider keeps the listed price). Pre-run, so blocks respond as plain
+    // JSON; the standing rides along so the client renders the right card.
     const gate = await checkMessageGate(userId);
+    let charge: {
+      priceMicros: number;
+      feeMicros: number;
+      providerUserId: string | null;
+    } | null = null;
     if (!gate.allowed) {
-      res.status(403).json({ ok: false, error: gate.code, standing: gate.standing });
-      return;
+      const row = gate.code === "budget_exhausted" ? await getAgentRow(agentId) : null;
+      if (row) {
+        const priceMicros = usdToMicros(row.pricePerMsg);
+        const fee = feeMicros(priceMicros, gate.standing.feeDiscount);
+        // Race window: two in-flight paid messages can both pass this check.
+        // Accepted for v1 — the ledger stays honest (both charges land), the
+        // balance just dips below zero until the next top-up.
+        const balance = await balanceMicros(userId);
+        if (priceMicros + fee > 0 && balance >= priceMicros + fee) {
+          charge = { priceMicros, feeMicros: fee, providerUserId: row.ownerUserId };
+        }
+      }
+      if (!charge) {
+        const balance = await balanceMicros(userId);
+        res.status(403).json({
+          ok: false,
+          error: gate.code,
+          standing: gate.standing,
+          balanceUsd: microsToUsd(balance),
+        });
+        return;
+      }
     }
 
     // From here on the run is live — switch to the NDJSON stream. Errors now
@@ -201,11 +231,32 @@ messagesRoutes.post(
       result.blocks,
     );
 
-    // Budget is only consumed by delivered replies — a failed run above
+    // Money and budget only move on delivered replies — a failed run above
     // returned before this point, which is the auto-refund rule in practice.
-    if (gate.metered) await recordUsage(userId, agentId);
+    if (charge) {
+      await insertCharge({
+        userId,
+        agentId,
+        providerUserId: charge.providerUserId,
+        priceMicros: charge.priceMicros,
+        feeMicros: charge.feeMicros,
+      });
+    } else if (gate.allowed && gate.metered) {
+      await recordUsage(userId, agentId);
+    }
 
-    writeLine({ t: "result", result: { ...result, session, messageId } });
+    const chargeInfo = charge
+      ? {
+          priceUsd: microsToUsd(charge.priceMicros),
+          feeUsd: microsToUsd(charge.feeMicros),
+          balanceUsd: microsToUsd(await balanceMicros(userId)),
+        }
+      : undefined;
+
+    writeLine({
+      t: "result",
+      result: { ...result, session, messageId, ...(chargeInfo ? { charge: chargeInfo } : {}) },
+    });
     res.end();
   }),
 );

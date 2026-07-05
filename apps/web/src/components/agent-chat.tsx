@@ -35,6 +35,8 @@ import { formatResetDay, formatTokens } from "@/lib/format";
 import { useAuth } from "@/components/auth/auth-provider";
 import { TierBadge } from "@/components/token/tier-badge";
 import { useTokenStanding } from "@/components/token/use-token-standing";
+import { useCredits } from "@/components/credits/use-credits";
+import { microsToUsd, paidCostMicros, usdToMicros } from "@occa-market/shared";
 
 type Message =
   | { role: "user"; text: string }
@@ -118,15 +120,24 @@ export function AgentChat({
   // §4). The server is authoritative — a blocked send returns fresh standing,
   // so a stale client mirror can never let a message through.
   const { standing, setStanding, refresh, refreshing } = useTokenStanding();
+  const { credits, setCredits } = useCredits();
   const unmetered = standing?.unmetered ?? false;
   const gated = Boolean(standing?.enforced) && !unmetered;
   // Weekly binding beats daily in the copy — "back Monday" is the truth even
   // if today's allowance also happens to be dry.
   const weeklyDone = gated && standing!.remaining <= 0;
   const dailyDone = gated && !weeklyDone && standing!.remainingToday <= 0;
+  const budgetDry = dailyDone || weeklyDone;
+
+  // A dry budget falls through to PAID messages when the credit balance
+  // covers this agent's price + fee — mirroring the server's gate order.
+  const paidCostUsd = microsToUsd(
+    paidCostMicros(usdToMicros(price), standing?.feeDiscount ?? 0),
+  );
+  const paidMode = budgetDry && (credits?.balanceUsd ?? 0) >= paidCostUsd;
 
   const signedOut = status === "unauthenticated" || status === "disabled";
-  const blocked = dailyDone || weeklyDone;
+  const blocked = budgetDry && !paidMode;
   const activeSession = sessions.find((s) => s.id === activeId) ?? null;
 
   // Sessions live server-side, keyed by the signed-in user. Pull the list once
@@ -252,8 +263,12 @@ export function AgentChat({
           data.session,
           ...prev.filter((s) => s.id !== data.session.id),
         ]);
-        // One delivered reply = one budget message — mirror the ledger.
-        if (!unmetered) {
+        // Mirror the server's ledger: a paid reply moves the credit
+        // balance, a free one consumes budget.
+        if (data.charge) {
+          const balanceUsd = data.charge.balanceUsd;
+          setCredits((c) => (c ? { ...c, balanceUsd } : c));
+        } else if (!unmetered) {
           setStanding((s) =>
             s
               ? {
@@ -274,6 +289,10 @@ export function AgentChat({
         // the composer into the right card) and withdraw the optimistic
         // user message; the card is the explanation, not an error bubble.
         setStanding(data.standing);
+        if (typeof data.balanceUsd === "number") {
+          const balanceUsd = data.balanceUsd;
+          setCredits((c) => (c ? { ...c, balanceUsd } : c));
+        }
         setMessages((prev) => prev.slice(0, -1));
         setInput(trimmed);
       } else {
@@ -518,6 +537,12 @@ export function AgentChat({
                     <>Holding more $OCCA raises the daily and weekly caps.</>
                   )}
                 </p>
+                <p className="mx-auto mt-2 max-w-sm font-body text-[13px] leading-relaxed text-muted">
+                  Paid messages in USDC are{" "}
+                  <span className="font-mono text-fg">coming soon</span>
+                  {" — "}you&apos;ll be able to keep chatting past the free
+                  budget.
+                </p>
                 <div className="mt-4 flex items-center justify-center gap-2">
                   <Button size="md" href={config.occaTokenUrl} target="_blank">
                     {standing!.trial ? "Get $OCCA" : "Get more $OCCA"}
@@ -571,7 +596,9 @@ export function AgentChat({
                 </form>
 
                 <p className="mt-2 text-right font-mono text-[0.7rem] text-faint">
-                  ${price.toFixed(2)} USDC per message
+                  {paidMode
+                    ? `$${paidCostUsd.toFixed(2)} USDC per message from your credits · $${(credits?.balanceUsd ?? 0).toFixed(2)} left`
+                    : `$${price.toFixed(2)} USDC per message`}
                 </p>
               </Card>
             )}

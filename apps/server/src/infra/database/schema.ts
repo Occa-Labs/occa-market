@@ -198,6 +198,38 @@ export const budgetUsage = pgTable(
 export type BudgetUsageRow = typeof budgetUsage.$inferSelect;
 
 /*
+  Credit ledger — the custodial money book, append-only. One row per deposit
+  (verified USDC transfer, keyed by tx signature) and per paid delivered
+  message (negative amount, price + fee, with agent/provider attribution so
+  provider earnings can be derived later without a second table). Balance =
+  SUM(amount_micros); amounts are integer micro-USD, never floats. Kept
+  outside the session/message cascade — deleting a chat never refunds money.
+*/
+export const creditLedger = pgTable(
+  "credit_ledger",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<"deposit" | "charge" | "refund">().notNull(),
+    // Signed: deposits/refunds positive, charges negative.
+    amountMicros: bigint("amount_micros", { mode: "number" }).notNull(),
+    // Charge attribution (informational, no FK — money outlives the catalog).
+    agentId: text("agent_id"),
+    providerUserId: uuid("provider_user_id"),
+    priceMicros: bigint("price_micros", { mode: "number" }),
+    feeMicros: bigint("fee_micros", { mode: "number" }),
+    // Deposit provenance — unique so a transfer can never be credited twice.
+    txSignature: text("tx_signature").unique(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("credit_ledger_user_idx").on(t.userId, t.createdAt)],
+);
+
+export type CreditLedgerRow = typeof creditLedger.$inferSelect;
+
+/*
   Daily anchors — one row per (agent, UTC day) committed on-chain via the
   registry's commit_daily_anchor. Mirrors the DailyAnchorAccount so reads
   never need an RPC round-trip; the chain stays the tamper-evident source.
