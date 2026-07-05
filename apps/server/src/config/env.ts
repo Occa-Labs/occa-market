@@ -28,7 +28,6 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: opt(z.string().min(1).optional()),
   RUNTIME_MODEL: opt(z.string().min(1).default("claude-opus-4-8")),
   RUNTIME_MAX_TOKENS: opt(z.coerce.number().int().positive().default(1024)),
-  WELCOME_CREDIT: opt(z.coerce.number().nonnegative().default(0.5)),
   ALLOWED_AGENTS: opt(z.string().default("degen-scout")),
   // Wall-clock budget for one gateway run. Tool-heavy turns (OHLCV pulls,
   // transaction tapes) routinely pass 2 minutes; the live activity timeline
@@ -56,6 +55,20 @@ const envSchema = z.object({
   ONCHAIN_COMPANY_PDA: opt(z.string().min(32).optional()),
   ONCHAIN_OWNER_KEYPAIR: opt(z.string().min(1).optional()),
   ONCHAIN_ANCHOR_KEYPAIR: opt(z.string().min(1).optional()),
+  // $OCCA holder gating (token doc). The mint lives on mainnet (pump.fun) —
+  // a separate RPC from the devnet provenance block above. Gating activates
+  // only when TOKEN_GATE_ENABLED=1; otherwise standing still computes (badge
+  // works) but chat/publish stay open, so local dev needs no holdings.
+  TOKEN_GATE_ENABLED: opt(z.coerce.number().int().min(0).max(1).default(0)),
+  TOKEN_MINT: opt(
+    z.string().min(32).default("GYSHDDoVtFNdzR72SSkmJcKWFVh9ndhMdYoDKdg8pump"),
+  ),
+  TOKEN_RPC_URL: opt(z.string().url().default("https://api.mainnet-beta.solana.com")),
+  TOKEN_TOTAL_SUPPLY: opt(z.coerce.number().positive().default(1_000_000_000)),
+  // How long a balance snapshot stays fresh before standing re-reads the chain.
+  TOKEN_CACHE_TTL_MS: opt(z.coerce.number().int().positive().default(600_000)),
+  // Dev/admin wallets (CSV): unmetered, bypass hold + budget gates.
+  DEV_WALLETS: opt(z.string().default("")),
 });
 
 function loadEnv() {
@@ -74,7 +87,6 @@ function loadEnv() {
     anthropicApiKey: e.ANTHROPIC_API_KEY,
     runtimeModel: e.RUNTIME_MODEL,
     runtimeMaxTokens: e.RUNTIME_MAX_TOKENS,
-    welcomeCredit: e.WELCOME_CREDIT,
     allowedAgents: csv(e.ALLOWED_AGENTS),
     gatewayRunTimeoutMs: e.GATEWAY_RUN_TIMEOUT_MS,
     jwtSecret: e.JWT_SECRET,
@@ -91,6 +103,14 @@ function loadEnv() {
       enabled: Boolean(
         e.ONCHAIN_COMPANY_PDA && e.ONCHAIN_OWNER_KEYPAIR && e.ONCHAIN_ANCHOR_KEYPAIR,
       ),
+    },
+    token: {
+      gateEnabled: e.TOKEN_GATE_ENABLED === 1,
+      mint: e.TOKEN_MINT,
+      rpcUrl: e.TOKEN_RPC_URL,
+      totalSupply: e.TOKEN_TOTAL_SUPPLY,
+      cacheTtlMs: e.TOKEN_CACHE_TTL_MS,
+      devWallets: csv(e.DEV_WALLETS),
     },
   } as const;
 }

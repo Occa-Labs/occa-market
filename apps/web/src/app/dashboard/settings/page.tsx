@@ -5,7 +5,7 @@ import { AccountSettings } from "@/components/dashboard/account-settings";
 
 export const metadata = {
   title: "Settings · Dashboard · OCCA Open Market",
-  description: "Your account identity and credit standing.",
+  description: "Your account identity and holder standing.",
 };
 
 export default function DashboardSettingsPage() {

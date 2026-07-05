@@ -31,7 +31,10 @@ import {
   sendMessage,
 } from "@/lib/api";
 import { config } from "@/lib/config";
+import { formatResetDay, formatTokens } from "@/lib/format";
 import { useAuth } from "@/components/auth/auth-provider";
+import { TierBadge } from "@/components/token/tier-badge";
+import { useTokenStanding } from "@/components/token/use-token-standing";
 
 type Message =
   | { role: "user"; text: string }
@@ -91,19 +94,23 @@ export function AgentChat({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [credit, setCredit] = useState(config.welcomeCredit);
   const [sending, setSending] = useState(false);
   // Live activity while a turn runs, fed by the run's event stream.
   const [activity, setActivity] = useState<ActivityStep[]>([]);
 
-  // Dev/admin wallets ride free — no metering, no top-up gate. Client-side
-  // courtesy only; the server-side ledger will enforce the same allowlist.
-  const { user, status, signIn } = useAuth();
-  const unmetered =
-    !!user?.walletAddress && config.devWallets.includes(user.walletAddress);
+  const { status, signIn } = useAuth();
+
+  // Holder standing drives the meter and the gates ($OCCA tiers, token doc
+  // §4). The server is authoritative — a blocked send returns fresh standing,
+  // so a stale client mirror can never let a message through.
+  const { standing, setStanding, refresh, refreshing } = useTokenStanding();
+  const unmetered = standing?.unmetered ?? false;
+  const gated = Boolean(standing?.enforced) && !unmetered;
+  const holdGate = gated && standing!.tier === "none";
+  const exhausted = gated && standing!.tier !== "none" && standing!.remaining <= 0;
 
   const signedOut = status === "unauthenticated" || status === "disabled";
-  const broke = !unmetered && credit < price;
+  const blocked = holdGate || exhausted;
   const activeSession = sessions.find((s) => s.id === activeId) ?? null;
 
   // Sessions live server-side, keyed by the signed-in user. Pull the list once
@@ -191,7 +198,7 @@ export function AgentChat({
 
   async function send(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || broke || sending || status !== "authenticated") return;
+    if (!trimmed || blocked || sending || status !== "authenticated") return;
 
     setMessages((prev) => [...prev, { role: "user", text: trimmed }]);
     setInput("");
@@ -229,11 +236,28 @@ export function AgentChat({
           data.session,
           ...prev.filter((s) => s.id !== data.session.id),
         ]);
+        // One delivered reply = one budget message — mirror the ledger.
         if (!unmetered) {
-          setCredit((c) =>
-            Math.max(0, +(c - (data.usage?.costUsd ?? price)).toFixed(2)),
+          setStanding((s) =>
+            s
+              ? {
+                  ...s,
+                  usedThisWeek: s.usedThisWeek + 1,
+                  remaining: Math.max(0, s.remaining - 1),
+                }
+              : s,
           );
         }
+      } else if (
+        (data.error === "hold_required" || data.error === "budget_exhausted") &&
+        data.standing
+      ) {
+        // The holder gate said no — adopt the server's standing (which flips
+        // the composer into the right card) and withdraw the optimistic
+        // user message; the card is the explanation, not an error bubble.
+        setStanding(data.standing);
+        setMessages((prev) => prev.slice(0, -1));
+        setInput(trimmed);
       } else {
         fail(data.error, data.reason);
       }
@@ -252,7 +276,7 @@ export function AgentChat({
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-8 sm:px-6">
-      {/* chat header — identity + live credit */}
+      {/* chat header — identity + holder standing */}
       <div className="mb-5 flex items-center justify-between gap-3">
         <Link
           href={`/agents/${agent.id}`}
@@ -283,13 +307,23 @@ export function AgentChat({
                 }
               />
             )}
-            <span
-              className={`rounded-full border bg-surface-2 px-3 py-1 font-mono text-xs tabular-nums ${
-                broke ? "border-warn/30 text-warn" : "border-line text-muted"
-              }`}
-            >
-              {unmetered ? "dev · unmetered" : `$${credit.toFixed(2)} credit`}
-            </span>
+            {standing && <TierBadge tier={standing.tier} />}
+            {unmetered ? (
+              <span className="rounded-full border border-line bg-surface-2 px-3 py-1 font-mono text-xs text-muted">
+                dev · unmetered
+              </span>
+            ) : (
+              standing &&
+              standing.tier !== "none" && (
+                <span
+                  className={`rounded-full border bg-surface-2 px-3 py-1 font-mono text-xs tabular-nums ${
+                    exhausted ? "border-warn/30 text-warn" : "border-line text-muted"
+                  }`}
+                >
+                  {standing.remaining}/{standing.weeklyBudget} this week
+                </span>
+              )
+            )}
           </div>
         )}
       </div>
@@ -422,16 +456,57 @@ export function AgentChat({
                   Sign in
                 </Button>
               </Card>
-            ) : broke ? (
+            ) : holdGate ? (
               <Card className="p-5 text-center">
-                <p className="font-body text-sm text-fg">Out of free credit</p>
+                <p className="font-body text-sm text-fg">Hold $OCCA to chat</p>
                 <p className="mx-auto mt-1 max-w-sm font-body text-[13px] leading-relaxed text-muted">
-                  Your welcome credit is used up. Top up with USDC to keep
-                  using {agent.name}.
+                  The free weekly budget is a holder benefit. You need{" "}
+                  <span className="font-mono text-fg">
+                    {formatTokens(standing!.toMembership)}
+                  </span>{" "}
+                  more $OCCA to reach the 0.1% membership line and unlock 20
+                  free messages a week — more if you hold more.
                 </p>
-                <Button size="md" className="mt-4">
-                  Top up with USDC
-                </Button>
+                <div className="mt-4 flex items-center justify-center gap-2">
+                  <Button size="md" href={config.occaTokenUrl} target="_blank">
+                    Get $OCCA
+                  </Button>
+                  <Button
+                    size="md"
+                    variant="secondary"
+                    disabled={refreshing}
+                    onClick={() => void refresh()}
+                  >
+                    {refreshing ? "Checking…" : "Just bought? Re-check"}
+                  </Button>
+                </div>
+              </Card>
+            ) : exhausted ? (
+              <Card className="p-5 text-center">
+                <p className="font-body text-sm text-fg">
+                  Weekly budget used up
+                </p>
+                <p className="mx-auto mt-1 max-w-sm font-body text-[13px] leading-relaxed text-muted">
+                  All {standing!.weeklyBudget} free messages are spent for this
+                  week. Your budget resets{" "}
+                  <span className="font-mono text-fg">
+                    {formatResetDay(standing!.weekResetAt)}
+                  </span>
+                  . Holding more $OCCA raises the weekly cap.
+                </p>
+                <div className="mt-4 flex items-center justify-center gap-2">
+                  <Button size="md" href={config.occaTokenUrl} target="_blank">
+                    Get more $OCCA
+                  </Button>
+                  <Button
+                    size="md"
+                    variant="secondary"
+                    disabled={refreshing}
+                    onClick={() => void refresh()}
+                  >
+                    {refreshing ? "Checking…" : "Re-check tier"}
+                  </Button>
+                </div>
               </Card>
             ) : (
               <Card className="p-4">

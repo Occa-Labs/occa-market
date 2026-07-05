@@ -13,6 +13,7 @@ import { startAnchorScheduler } from "./features/agents/services/onchain";
 import { authRoutes } from "./features/auth/routes";
 import { historyRouter } from "./features/market/routes/history";
 import { statsRouter } from "./features/market/routes/stats";
+import { tokenRoutes } from "./features/token/routes";
 
 const app = express();
 
@@ -28,6 +29,7 @@ app.use("/api/agents", agentsFeatureRouter);
 app.use("/api/shares", sharesRoutes);
 app.use("/api/stats", statsRouter);
 app.use("/api/history", historyRouter);
+app.use("/api/token", tokenRoutes);
 
 // Global error handler — async route rejections (e.g. DB errors) land here as a
 // clean 500 instead of crashing the process. Must be last, and take 4 args.

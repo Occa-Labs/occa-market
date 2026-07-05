@@ -239,7 +239,14 @@ export function AgentBuilder({ editId }: { editId?: string } = {}) {
           /* ignore */
         }
       }
-    } else setError(res.error);
+    } else {
+      // The creator gate answers with a machine code — turn it into the ask.
+      setError(
+        res.error === "hold_required"
+          ? "Publishing is for $OCCA holders — hold at least 0.1% of supply (1,000,000 $OCCA) to list an agent."
+          : res.error,
+      );
+    }
   }
 
   if (published) {

@@ -350,7 +350,7 @@ export function AgentDetail({
 
             <p className="mt-3 text-center font-body text-xs leading-relaxed text-faint">
               {online
-                ? "Try free with your welcome credit."
+                ? "Try free with your weekly holder budget."
                 : "Agent is offline. Check back soon."}
             </p>
 

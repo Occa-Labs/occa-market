@@ -16,6 +16,7 @@ import type {
 } from "./agent";
 import type { AuthUser } from "./auth";
 import type { OutputBlock } from "./output";
+import type { TokenStanding } from "./token";
 
 /** One prior turn of chat, oldest first, for model context. */
 export type ChatTurn = { role: "user" | "agent"; text: string };
@@ -114,7 +115,17 @@ export type SendMessageResponse =
       /** The stored agent reply's id — the handle for rating it. */
       messageId: string;
     }
-  | { ok: false; error: string; reason?: string };
+  | {
+      ok: false;
+      error: string;
+      reason?: string;
+      /**
+       * Present when the holder gate blocked the run (error is hold_required
+       * or budget_exhausted) — lets the client render the right card without
+       * a second fetch.
+       */
+      standing?: TokenStanding;
+    };
 
 /**
  * One live activity event while a turn runs — the chat's "what is the agent
@@ -300,3 +311,6 @@ export type PrivyLoginRequest = { accessToken: string };
 
 /** POST /api/auth/privy and GET /api/auth/me response. */
 export type AuthResponse = { token: string; user: AuthUser };
+
+/** GET /api/token/standing and POST /api/token/standing/refresh response. */
+export type TokenStandingResponse = { standing: TokenStanding };

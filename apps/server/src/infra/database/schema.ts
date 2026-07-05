@@ -40,6 +40,11 @@ export const users = pgTable("users", {
   walletAddress: text("wallet_address"),
   email: text("email"),
   name: text("name"),
+  // $OCCA holdings snapshot (UI token amount) backing the holder tier. Written
+  // by the standing service on a TTL; tier itself is always computed from the
+  // balance so threshold changes never need a backfill.
+  tokenBalance: doublePrecision("token_balance").notNull().default(0),
+  tokenCheckedAt: timestamp("token_checked_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -169,6 +174,28 @@ export const messageRatings = pgTable(
 );
 
 export type MessageRatingRow = typeof messageRatings.$inferSelect;
+
+/*
+  Weekly budget ledger — one row per free-budget message consumed. Kept
+  deliberately outside the session/message cascade so deleting a chat never
+  refunds budget. usedThisWeek = count(user, createdAt >= week start); no
+  reset job needed. agentId is informational (no FK) — consumption belongs
+  to the user, not the agent's lifecycle.
+*/
+export const budgetUsage = pgTable(
+  "budget_usage",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    agentId: text("agent_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("budget_usage_user_week_idx").on(t.userId, t.createdAt)],
+);
+
+export type BudgetUsageRow = typeof budgetUsage.$inferSelect;
 
 /*
   Daily anchors — one row per (agent, UTC day) committed on-chain via the

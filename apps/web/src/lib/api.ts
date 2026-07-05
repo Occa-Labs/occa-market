@@ -28,6 +28,8 @@ import type {
   SendMessageResponse,
   SharedSessionResponse,
   ShareSessionResponse,
+  TokenStanding,
+  TokenStandingResponse,
   UpdateAgentRequest,
   SkillImportResponse,
 } from "@occa-market/shared";
@@ -219,6 +221,30 @@ export async function fetchMe(): Promise<AuthUser | null> {
   if (!res.ok) throw new Error(`me failed: ${res.status}`);
   const data = (await res.json()) as { user: AuthUser };
   return data.user;
+}
+
+// ── Holder standing ($OCCA tier + weekly budget) ───────────────────────────
+
+/** The caller's holder standing. Null when signed out. */
+export async function getTokenStanding(): Promise<TokenStanding | null> {
+  const res = await fetch(`${base}/api/token/standing`, {
+    headers: authHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as TokenStandingResponse;
+  return data.standing;
+}
+
+/** Force a chain re-read of the caller's balance — the "I just bought" button. */
+export async function refreshTokenStanding(): Promise<TokenStanding | null> {
+  const res = await fetch(`${base}/api/token/standing/refresh`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as TokenStandingResponse;
+  return data.standing;
 }
 
 /**

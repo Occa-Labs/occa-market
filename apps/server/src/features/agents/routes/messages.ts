@@ -20,6 +20,8 @@ import {
   setSessionShare,
   toChatTurn,
 } from "../repositories/messages";
+import { recordUsage } from "../../token/repositories/usage";
+import { checkMessageGate } from "../../token/services/standing";
 import { runtime } from "../services/runtime/registry";
 
 export const messagesRoutes = Router();
@@ -150,6 +152,15 @@ messagesRoutes.post(
       return;
     }
 
+    // Holder gate (token doc §4/§6): membership line, then weekly budget.
+    // Pre-run, so it responds as plain JSON like the other pre-run failures;
+    // the standing rides along so the client renders the right card directly.
+    const gate = await checkMessageGate(userId);
+    if (!gate.allowed) {
+      res.status(403).json({ ok: false, error: gate.code, standing: gate.standing });
+      return;
+    }
+
     // From here on the run is live — switch to the NDJSON stream. Errors now
     // ride in the result line, not the HTTP status.
     res.setHeader("Content-Type", "application/x-ndjson");
@@ -189,6 +200,10 @@ messagesRoutes.post(
       message,
       result.blocks,
     );
+
+    // Budget is only consumed by delivered replies — a failed run above
+    // returned before this point, which is the auto-refund rule in practice.
+    if (gate.metered) await recordUsage(userId, agentId);
 
     writeLine({ t: "result", result: { ...result, session, messageId } });
     res.end();

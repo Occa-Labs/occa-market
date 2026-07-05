@@ -3,8 +3,6 @@
   The ONE place the web reads env — components import `config`, not process.env.
 */
 
-const welcomeCredit = Number(process.env.NEXT_PUBLIC_WELCOME_CREDIT);
-
 const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? "";
 
 // Dev/admin wallets that bypass the chat credit gate (CSV). Client-side
@@ -25,12 +23,14 @@ export const config = {
     (typeof window === "undefined" ? process.env.API_URL_INTERNAL : undefined) ??
     process.env.NEXT_PUBLIC_API_URL ??
     "http://localhost:4000",
-  /** Display-only welcome credit the chat seeds (server holds the real ledger). */
-  welcomeCredit: Number.isFinite(welcomeCredit) ? welcomeCredit : 0.5,
   /** Privy app id (public). Empty string disables sign-in gracefully. */
   privyAppId,
   /** Whether Privy sign-in is configured. */
   privyEnabled: privyAppId.length > 0,
   /** Wallets exempt from the credit gate (dev/admin). */
   devWallets,
+  /** Where "Get $OCCA" points — the token's live venue. */
+  occaTokenUrl:
+    process.env.NEXT_PUBLIC_OCCA_TOKEN_URL ??
+    "https://pump.fun/coin/GYSHDDoVtFNdzR72SSkmJcKWFVh9ndhMdYoDKdg8pump",
 } as const;

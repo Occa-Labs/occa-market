@@ -3,7 +3,7 @@
 /*
   The dashboard's Settings tab (reference: Clerk's workspace profile): the
   account identity — wallet address with copy (the "Workspace ID" of this
-  product), signed-in email, credit standing, sign out.
+  product), signed-in email, holder standing, sign out.
 */
 
 import { useState } from "react";
@@ -11,10 +11,14 @@ import { Check, Copy, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { config } from "@/lib/config";
+import { formatResetDay, formatTokens } from "@/lib/format";
 import { useAuth } from "@/components/auth/auth-provider";
+import { TierBadge } from "@/components/token/tier-badge";
+import { useTokenStanding } from "@/components/token/use-token-standing";
 
 export function AccountSettings() {
   const { user, status, signIn, signOut } = useAuth();
+  const { standing, refresh, refreshing } = useTokenStanding();
   const [copied, setCopied] = useState(false);
 
   if (status === "unauthenticated" || status === "disabled") {
@@ -37,7 +41,10 @@ export function AccountSettings() {
   }
 
   const wallet = user.walletAddress ?? "";
-  const unmetered = !!wallet && config.devWallets.includes(wallet);
+  // Server standing is the truth once loaded; the client list only covers the
+  // pre-load flash.
+  const unmetered =
+    standing?.unmetered ?? (!!wallet && config.devWallets.includes(wallet));
 
   async function copy() {
     if (!wallet) return;
@@ -87,22 +94,96 @@ export function AccountSettings() {
       </Card>
 
       <Card className="p-6">
-        <h2 className="text-base font-semibold text-fg">Credit</h2>
-        <p className="mt-1 font-body text-[13px] leading-relaxed text-muted">
-          Chat is metered per message in USDC.
-        </p>
-        <p className="mt-4 font-mono text-sm text-fg">
-          {unmetered ? (
-            <span className="rounded-full border border-line bg-surface-2 px-3 py-1 text-xs text-muted">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-fg">Holder standing</h2>
+          {standing && !unmetered && <TierBadge tier={standing.tier} />}
+          {unmetered && (
+            <span className="rounded-full border border-line bg-surface-2 px-3 py-1 font-mono text-xs text-muted">
               dev · unmetered
             </span>
-          ) : (
-            <>
-              ${config.welcomeCredit.toFixed(2)}
-              <span className="ml-1.5 text-xs text-faint">welcome credit</span>
-            </>
           )}
+        </div>
+        <p className="mt-1 font-body text-[13px] leading-relaxed text-muted">
+          USDC pays, $OCCA unlocks. Your free weekly messages and fee discount
+          scale with how much $OCCA this wallet holds.
         </p>
+
+        {!standing ? (
+          <p className="mt-4 font-body text-xs text-faint">Reading standing…</p>
+        ) : (
+          <>
+            <div className="mt-5 grid gap-4 sm:grid-cols-3">
+              <div>
+                <p className="eyebrow mb-1.5">Balance</p>
+                <p className="font-mono text-sm text-fg">
+                  {formatTokens(standing.balance)}
+                  <span className="ml-1 text-xs text-faint">$OCCA</span>
+                </p>
+                <p className="mt-0.5 font-mono text-xs text-faint">
+                  {(standing.supplyPct * 100).toFixed(3)}% of supply
+                </p>
+              </div>
+              <div>
+                <p className="eyebrow mb-1.5">Free weekly messages</p>
+                <p className="font-mono text-sm text-fg">
+                  {standing.tier === "none" ? (
+                    "—"
+                  ) : (
+                    <>
+                      {standing.remaining}
+                      <span className="text-xs text-faint">
+                        {" "}
+                        / {standing.weeklyBudget} left
+                      </span>
+                    </>
+                  )}
+                </p>
+                {standing.tier !== "none" && (
+                  <p className="mt-0.5 font-mono text-xs text-faint">
+                    resets {formatResetDay(standing.weekResetAt)}
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="eyebrow mb-1.5">Fee discount</p>
+                <p className="font-mono text-sm text-fg">
+                  {standing.tier === "none"
+                    ? "—"
+                    : `${Math.round(standing.feeDiscount * 100)}%`}
+                </p>
+              </div>
+            </div>
+
+            {standing.tier === "none" && !unmetered && (
+              <p className="mt-4 font-body text-[13px] leading-relaxed text-muted">
+                You&apos;re below the 0.1% membership line — hold{" "}
+                <span className="font-mono text-fg">
+                  {formatTokens(standing.toMembership)}
+                </span>{" "}
+                more $OCCA to unlock the free weekly budget.
+              </p>
+            )}
+
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={refreshing}
+                onClick={() => void refresh()}
+              >
+                {refreshing ? "Checking…" : "Re-check balance"}
+              </Button>
+              <Button size="sm" href={config.occaTokenUrl} target="_blank">
+                Get $OCCA
+              </Button>
+              {standing.checkedAt && (
+                <span className="font-mono text-[0.65rem] text-faint">
+                  checked {new Date(standing.checkedAt).toLocaleTimeString()}
+                </span>
+              )}
+            </div>
+          </>
+        )}
       </Card>
 
       <div>

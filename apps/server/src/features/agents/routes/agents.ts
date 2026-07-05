@@ -24,6 +24,7 @@ import {
   listAgentsByOwner,
 } from "../repositories/agents";
 import { createAgentBody, updateAgentBody } from "../domain/schemas";
+import { checkPublishGate } from "../../token/services/standing";
 import { publishAgent } from "../services/create-agent";
 import { reviseAgent } from "../services/update-agent";
 
@@ -60,6 +61,14 @@ agentsRoutes.post(
     if (!parsed.success) {
       const error = parsed.error.issues[0]?.message ?? "invalid body";
       res.status(400).json({ ok: false, error });
+      return;
+    }
+
+    // Creator gate (token doc §6.6): listing requires holding the membership
+    // line. Skin in the game is the spam filter.
+    const gate = await checkPublishGate(req.user!.userId);
+    if (!gate.allowed) {
+      res.status(403).json({ ok: false, error: gate.code, standing: gate.standing });
       return;
     }
 
