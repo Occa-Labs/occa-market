@@ -70,6 +70,15 @@ body {
   color: var(--color-on-accent);
 }
 
+/* Hide the scrollbar entirely (still scrolls) — for the chat composer, whose
+   own rounded border is the visual edge; a track would break the shape. */
+.no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Eyebrow / HUD label — mono, uppercase, faint. Data voice only. */
 .eyebrow {
   font-family: var(--font-mono);

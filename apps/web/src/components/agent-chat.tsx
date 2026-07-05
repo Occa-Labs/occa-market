@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -111,6 +111,7 @@ export function AgentChat({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   // Live activity while a turn runs, fed by the run's event stream.
   const [activity, setActivity] = useState<ActivityStep[]>([]);
 
@@ -158,6 +159,14 @@ export function AgentChat({
       active = false;
     };
   }, [status, agent.id]);
+
+  // Grow the composer with its content (capped), shrink back when cleared.
+  useEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [input]);
 
   async function openSession(id: string) {
     if (id === activeId || sending) return;
@@ -578,13 +587,23 @@ export function AgentChat({
                     e.preventDefault();
                     send(input);
                   }}
-                  className="flex items-center gap-2"
+                  className="flex items-end gap-2"
                 >
-                  <input
+                  <textarea
+                    ref={composerRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      // Enter sends, Shift+Enter breaks the line — the
+                      // convention every chat UI has trained people on.
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        send(input);
+                      }
+                    }}
                     placeholder={`Ask ${agent.name}…`}
-                    className="h-10 flex-1 rounded-xl border border-line bg-surface-2 px-3.5 font-body text-sm text-fg placeholder:text-faint focus:border-line-strong focus:outline-none"
+                    rows={1}
+                    className="no-scrollbar max-h-40 min-h-10 flex-1 resize-none rounded-xl border border-line bg-surface-2 px-3.5 py-2.5 font-body text-sm leading-relaxed text-fg placeholder:text-faint focus:border-line-strong focus:outline-none"
                   />
                   <Button
                     size="lg"

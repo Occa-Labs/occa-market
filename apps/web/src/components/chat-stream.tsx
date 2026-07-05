@@ -25,7 +25,7 @@ export function ChatStream({
       {items.map((m, i) =>
         m.role === "user" ? (
           <div key={i} className="flex justify-end">
-            <div className="max-w-[80%] rounded-2xl rounded-br-md border border-line bg-surface-2 px-4 py-2.5 font-body text-sm text-fg">
+            <div className="max-w-[80%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md border border-line bg-surface-2 px-4 py-2.5 font-body text-sm text-fg">
               {m.text}
             </div>
           </div>
