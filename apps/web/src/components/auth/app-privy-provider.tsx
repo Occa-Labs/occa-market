@@ -1,6 +1,7 @@
 "use client";
 
 import { PrivyProvider } from "@privy-io/react-auth";
+import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 import type { ReactNode } from "react";
 import { config } from "@/lib/config";
 
@@ -25,6 +26,12 @@ export function AppPrivyProvider({ children }: { children: ReactNode }) {
         embeddedWallets: {
           solana: { createOnLogin: "users-without-wallets" },
           showWalletUIs: true,
+        },
+        // Injected Solana wallet detection is opt-in: without these connectors
+        // Privy can't see the Phantom extension and falls back to the
+        // install-the-app deeplink flow. Solana only — no EVM connectors.
+        externalWallets: {
+          solana: { connectors: toSolanaWalletConnectors() },
         },
       }}
     >
