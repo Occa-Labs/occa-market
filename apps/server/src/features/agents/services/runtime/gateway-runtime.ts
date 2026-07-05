@@ -71,6 +71,7 @@ export class GatewayRuntime {
         ok: false,
         error: result.error ?? "run_failed",
         reason: result.reason,
+        retryAt: result.retryAt,
       };
     }
     return {

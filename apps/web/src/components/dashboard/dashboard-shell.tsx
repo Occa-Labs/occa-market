@@ -1,7 +1,8 @@
 /*
-  Provider dashboard chrome — page heading plus the tab row (reference: the
-  Clerk dashboard's Applications / Settings tabs). Each dashboard page renders
-  inside this shell and names the active tab.
+  Provider dashboard chrome (reference: the Clerk dashboard): a full-bleed
+  tab row sitting directly under the site header — no page-level heading;
+  each tab's content brings its own title. Pages render inside this shell
+  and name the active tab.
 */
 
 import Link from "next/link";
@@ -22,29 +23,31 @@ export function DashboardShell({
   children: ReactNode;
 }) {
   return (
-    <main className="mx-auto max-w-6xl px-5 py-10 sm:px-6">
-      <p className="eyebrow mb-2">Provider</p>
-      <h1 className="text-2xl font-semibold tracking-tight text-fg">Dashboard</h1>
+    <main>
+      {/* tab row — hairline spans the viewport, active underline sits on it */}
+      <div className="border-b border-line">
+        <nav className="mx-auto flex max-w-6xl gap-7 px-5 sm:px-6">
+          {TABS.map((tab) => (
+            <Link
+              key={tab.key}
+              href={tab.href}
+              className={`relative py-3.5 text-sm transition-colors ${
+                tab.key === active ? "text-fg" : "text-muted hover:text-fg"
+              }`}
+            >
+              {tab.label}
+              {tab.key === active && (
+                <span
+                  className="absolute inset-x-0 -bottom-px h-0.5 bg-fg"
+                  aria-hidden
+                />
+              )}
+            </Link>
+          ))}
+        </nav>
+      </div>
 
-      {/* tab row — hairline base, solid underline on the active tab */}
-      <nav className="mt-6 flex gap-6 border-b border-line">
-        {TABS.map((tab) => (
-          <Link
-            key={tab.key}
-            href={tab.href}
-            className={`relative pb-3 text-sm transition-colors ${
-              tab.key === active ? "text-fg" : "text-muted hover:text-fg"
-            }`}
-          >
-            {tab.label}
-            {tab.key === active && (
-              <span className="absolute inset-x-0 bottom-0 h-px bg-fg" aria-hidden />
-            )}
-          </Link>
-        ))}
-      </nav>
-
-      <div className="mt-8">{children}</div>
+      <div className="mx-auto max-w-6xl px-5 py-10 sm:px-6">{children}</div>
     </main>
   );
 }

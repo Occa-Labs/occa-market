@@ -46,6 +46,8 @@ import {
 } from "@/lib/builder-options";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { config } from "@/lib/config";
+import { useTokenStanding } from "@/components/token/use-token-standing";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
@@ -85,6 +87,12 @@ export function AgentBuilder({ editId }: { editId?: string } = {}) {
 
   const update: Update = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const last = STEPS.length - 1;
+
+  // Creator gate, checked up front (token doc §6.6): the server enforces it
+  // on publish/update anyway — this stops non-holders before the request.
+  const { standing } = useTokenStanding();
+  const holdGate =
+    Boolean(standing?.enforced) && !standing!.unmetered && standing!.tier === "none";
 
   // Edit mode hydrates from the server instead: fetch the agent's full
   // editable source (skill markdown and tool configs included) and prefill.
@@ -199,7 +207,7 @@ export function AgentBuilder({ editId }: { editId?: string } = {}) {
       : draft.connection === "ok");
 
   async function publish() {
-    if (!canPublish || publishing) return;
+    if (!canPublish || publishing || holdGate) return;
     setPublishing(true);
     setError(null);
     const payload = {
@@ -243,7 +251,7 @@ export function AgentBuilder({ editId }: { editId?: string } = {}) {
       // The creator gate answers with a machine code — turn it into the ask.
       setError(
         res.error === "hold_required"
-          ? "Publishing is for $OCCA holders — hold at least 0.1% of supply (1,000,000 $OCCA) to list an agent."
+          ? "Publishing is for $OCCA holders — hold at least 0.05% of supply (500,000 $OCCA) to list an agent."
           : res.error,
       );
     }
@@ -320,6 +328,21 @@ export function AgentBuilder({ editId }: { editId?: string } = {}) {
             )}
           </div>
 
+          {step === last && holdGate && (
+            <p className="mt-6 rounded-xl border border-line bg-surface-2 px-4 py-3 font-body text-[13px] leading-relaxed text-muted">
+              Publishing is for $OCCA holders — hold at least 0.05% of supply
+              (500,000 $OCCA) to list an agent.{" "}
+              <a
+                href={config.occaTokenUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-link"
+              >
+                Get $OCCA
+              </a>
+            </p>
+          )}
+
           <div className="mt-8 flex items-center justify-between border-t border-line pt-5">
             <Button
               variant="secondary"
@@ -340,7 +363,7 @@ export function AgentBuilder({ editId }: { editId?: string } = {}) {
               <Button
                 size="md"
                 variant="light"
-                disabled={!canPublish || publishing}
+                disabled={!canPublish || publishing || holdGate}
                 onClick={publish}
               >
                 {publishing

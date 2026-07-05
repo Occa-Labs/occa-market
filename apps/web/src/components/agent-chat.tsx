@@ -73,12 +73,26 @@ function humanizeRunError(agentName: string, code: string): string {
     timeout: `${agentName} took too long on this one, so the run was stopped. Retry, or ask a narrower question.`,
     network_error: `The connection to ${agentName}'s model dropped mid-run. That's usually transient — retry should work.`,
     prompt_failed: `${agentName}'s process died on its gateway before it could finish the reply.`,
+    provider_rate_limited: `${agentName} is at capacity right now — too many runs in a short window.`,
     stream_failed: `The reply stream broke before a result arrived.`,
     "unknown session": `This conversation no longer exists on the server — start a new chat.`,
     "unknown agent": `This agent no longer exists in the catalog.`,
     api_unreachable: `The market API can't be reached — is your connection (or the server) up?`,
   };
   return map[code] ?? `Something went wrong while running ${agentName}.`;
+}
+
+/** Append the capacity-reset hint when the server could parse one. */
+function withRetryHint(human: string, code: string, retryAt?: string): string {
+  if (code !== "provider_rate_limited") return human;
+  if (!retryAt || Number.isNaN(Date.parse(retryAt))) {
+    return `${human} It usually clears within a few hours — retry later.`;
+  }
+  const at = new Date(retryAt).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return `${human} Capacity frees up around ${at}.`;
 }
 
 export function AgentChat({
@@ -106,11 +120,13 @@ export function AgentChat({
   const { standing, setStanding, refresh, refreshing } = useTokenStanding();
   const unmetered = standing?.unmetered ?? false;
   const gated = Boolean(standing?.enforced) && !unmetered;
-  const holdGate = gated && standing!.tier === "none";
-  const exhausted = gated && standing!.tier !== "none" && standing!.remaining <= 0;
+  // Weekly binding beats daily in the copy — "back Monday" is the truth even
+  // if today's allowance also happens to be dry.
+  const weeklyDone = gated && standing!.remaining <= 0;
+  const dailyDone = gated && !weeklyDone && standing!.remainingToday <= 0;
 
   const signedOut = status === "unauthenticated" || status === "disabled";
-  const blocked = holdGate || exhausted;
+  const blocked = dailyDone || weeklyDone;
   const activeSession = sessions.find((s) => s.id === activeId) ?? null;
 
   // Sessions live server-side, keyed by the signed-in user. Pull the list once
@@ -205,12 +221,12 @@ export function AgentChat({
     setSending(true);
     setActivity([]);
 
-    const fail = (code: string, detail?: string) =>
+    const fail = (code: string, detail?: string, retryAt?: string) =>
       setMessages((prev) => [
         ...prev,
         {
           role: "error" as const,
-          human: humanizeRunError(agent.name, code),
+          human: withRetryHint(humanizeRunError(agent.name, code), code, retryAt),
           code,
           detail,
           retryText: trimmed,
@@ -242,6 +258,8 @@ export function AgentChat({
             s
               ? {
                   ...s,
+                  usedToday: s.usedToday + 1,
+                  remainingToday: Math.max(0, s.remainingToday - 1),
                   usedThisWeek: s.usedThisWeek + 1,
                   remaining: Math.max(0, s.remaining - 1),
                 }
@@ -259,7 +277,7 @@ export function AgentChat({
         setMessages((prev) => prev.slice(0, -1));
         setInput(trimmed);
       } else {
-        fail(data.error, data.reason);
+        fail(data.error, data.reason, data.retryAt);
       }
     } catch (err) {
       fail(
@@ -308,19 +326,24 @@ export function AgentChat({
               />
             )}
             {standing && <TierBadge tier={standing.tier} />}
+            {standing?.trial && !unmetered && (
+              <span className="rounded-full border border-line bg-surface-2 px-2.5 py-0.5 font-mono text-[0.65rem] uppercase tracking-[0.14em] text-muted">
+                trial
+              </span>
+            )}
             {unmetered ? (
               <span className="rounded-full border border-line bg-surface-2 px-3 py-1 font-mono text-xs text-muted">
                 dev · unmetered
               </span>
             ) : (
-              standing &&
-              standing.tier !== "none" && (
+              standing && (
                 <span
                   className={`rounded-full border bg-surface-2 px-3 py-1 font-mono text-xs tabular-nums ${
-                    exhausted ? "border-warn/30 text-warn" : "border-line text-muted"
+                    blocked ? "border-warn/30 text-warn" : "border-line text-muted"
                   }`}
                 >
-                  {standing.remaining}/{standing.weeklyBudget} this week
+                  {standing.remainingToday}/{standing.dailyBudget} today ·{" "}
+                  {standing.remaining}/{standing.weeklyBudget} wk
                 </span>
               )
             )}
@@ -328,7 +351,11 @@ export function AgentChat({
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+      {/* two columns only while the session rail is rendered — otherwise the
+          chat column would fall into the 220px rail track */}
+      <div
+        className={`grid gap-6 ${showSessions ? "lg:grid-cols-[220px_minmax(0,1fr)]" : ""}`}
+      >
         {/* session rail — desktop */}
         {showSessions && (
           <aside className="hidden lg:block">
@@ -456,20 +483,44 @@ export function AgentChat({
                   Sign in
                 </Button>
               </Card>
-            ) : holdGate ? (
+            ) : blocked ? (
               <Card className="p-5 text-center">
-                <p className="font-body text-sm text-fg">Hold $OCCA to chat</p>
+                <p className="font-body text-sm text-fg">
+                  {weeklyDone ? "Weekly limit reached" : "Daily limit reached"}
+                </p>
                 <p className="mx-auto mt-1 max-w-sm font-body text-[13px] leading-relaxed text-muted">
-                  The free weekly budget is a holder benefit. You need{" "}
-                  <span className="font-mono text-fg">
-                    {formatTokens(standing!.toMembership)}
-                  </span>{" "}
-                  more $OCCA to reach the 0.1% membership line and unlock 20
-                  free messages a week — more if you hold more.
+                  {weeklyDone ? (
+                    <>
+                      All {standing!.weeklyBudget} free messages for this week
+                      are spent. They reset{" "}
+                      <span className="font-mono text-fg">
+                        {formatResetDay(standing!.weekResetAt)}
+                      </span>
+                      .
+                    </>
+                  ) : (
+                    <>
+                      All {standing!.dailyBudget} free messages for today are
+                      spent. A fresh {standing!.dailyBudget} arrive at{" "}
+                      <span className="font-mono text-fg">00:00 UTC</span>.
+                    </>
+                  )}{" "}
+                  {standing!.trial ? (
+                    <>
+                      Hold{" "}
+                      <span className="font-mono text-fg">
+                        {formatTokens(standing!.toMembership)}
+                      </span>{" "}
+                      more $OCCA to unlock Entry — 10 a day, 40 a week, and
+                      more with higher tiers.
+                    </>
+                  ) : (
+                    <>Holding more $OCCA raises the daily and weekly caps.</>
+                  )}
                 </p>
                 <div className="mt-4 flex items-center justify-center gap-2">
                   <Button size="md" href={config.occaTokenUrl} target="_blank">
-                    Get $OCCA
+                    {standing!.trial ? "Get $OCCA" : "Get more $OCCA"}
                   </Button>
                   <Button
                     size="md"
@@ -478,33 +529,6 @@ export function AgentChat({
                     onClick={() => void refresh()}
                   >
                     {refreshing ? "Checking…" : "Just bought? Re-check"}
-                  </Button>
-                </div>
-              </Card>
-            ) : exhausted ? (
-              <Card className="p-5 text-center">
-                <p className="font-body text-sm text-fg">
-                  Weekly budget used up
-                </p>
-                <p className="mx-auto mt-1 max-w-sm font-body text-[13px] leading-relaxed text-muted">
-                  All {standing!.weeklyBudget} free messages are spent for this
-                  week. Your budget resets{" "}
-                  <span className="font-mono text-fg">
-                    {formatResetDay(standing!.weekResetAt)}
-                  </span>
-                  . Holding more $OCCA raises the weekly cap.
-                </p>
-                <div className="mt-4 flex items-center justify-center gap-2">
-                  <Button size="md" href={config.occaTokenUrl} target="_blank">
-                    Get more $OCCA
-                  </Button>
-                  <Button
-                    size="md"
-                    variant="secondary"
-                    disabled={refreshing}
-                    onClick={() => void refresh()}
-                  >
-                    {refreshing ? "Checking…" : "Re-check tier"}
                   </Button>
                 </div>
               </Card>

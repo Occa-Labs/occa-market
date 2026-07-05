@@ -41,6 +41,8 @@ export type GatewayRunResult = {
   costUsd: number | null;
   error?: string;
   reason?: string;
+  /** provider_rate_limited only: ISO moment the backend's window frees up. */
+  retryAt?: string;
 };
 
 export type GatewayRunBody = {
@@ -63,7 +65,7 @@ function headers(apiKey?: string): Record<string, string> {
   return h;
 }
 
-function runError(error: string, reason: string): GatewayRunResult {
+function runError(error: string, reason: string, retryAt?: string): GatewayRunResult {
   return {
     ok: false,
     reply: "",
@@ -72,6 +74,59 @@ function runError(error: string, reason: string): GatewayRunResult {
     costUsd: null,
     error,
     reason,
+    ...(retryAt ? { retryAt } : {}),
+  };
+}
+
+/*
+  Rate-limit normalization. The provider backend (a Claude subscription seat)
+  has a rolling usage window; when it trips, the failure arrives as a 429 or
+  as an error/reason mentioning the limit. Normalize those to one stable code
+  the UI can turn into "at capacity, frees up around …" — with the reset
+  moment parsed out when the message carries one.
+*/
+const RATE_LIMIT_RE = /rate.?limit|usage limit|too many requests|overloaded|quota exceeded|limit reached/i;
+
+/** Best-effort reset-moment parse: "in 25 minutes", "resets 3am", "resets 14:30". */
+export function parseRetryAt(text: string, now: Date = new Date()): string | undefined {
+  const rel = /in\s+(\d+)\s*(second|minute|min|hour|hr)s?/i.exec(text);
+  if (rel) {
+    const n = Number(rel[1]);
+    const unitMs = /^s/i.test(rel[2]) ? 1000 : /^h/i.test(rel[2]) ? 3600_000 : 60_000;
+    return new Date(now.getTime() + n * unitMs).toISOString();
+  }
+
+  const abs = /resets?\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i.exec(text);
+  if (abs) {
+    let hour = Number(abs[1]);
+    const minute = abs[2] ? Number(abs[2]) : 0;
+    const meridiem = abs[3]?.toLowerCase();
+    if (meridiem === "pm" && hour < 12) hour += 12;
+    if (meridiem === "am" && hour === 12) hour = 0;
+    if (hour > 23 || minute > 59) return undefined;
+    // The message gives no timezone — read it as UTC and roll to tomorrow if
+    // that moment already passed. Approximate, but honest enough for a hint.
+    const at = new Date(Date.UTC(
+      now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour, minute,
+    ));
+    if (at.getTime() <= now.getTime()) at.setUTCDate(at.getUTCDate() + 1);
+    return at.toISOString();
+  }
+
+  return undefined;
+}
+
+/** Rewrite a failed result to provider_rate_limited when it smells like one. */
+function normalizeRunFailure(result: GatewayRunResult): GatewayRunResult {
+  if (result.ok) return result;
+  const text = `${result.error ?? ""} ${result.reason ?? ""}`;
+  if (result.error === "provider_rate_limited" || !RATE_LIMIT_RE.test(text)) {
+    return result;
+  }
+  return {
+    ...result,
+    error: "provider_rate_limited",
+    retryAt: result.retryAt ?? parseRetryAt(text),
   };
 }
 
@@ -171,6 +226,17 @@ export async function gatewayRun(
   }
 
   if (res.status === 401) return runError("gateway_unauthorized", "bad gateway bearer");
+  if (res.status === 429) {
+    // Retry-After is seconds (or an HTTP date) when the gateway sends one.
+    const after = res.headers.get("retry-after");
+    const seconds = after ? Number(after) : NaN;
+    const retryAt = Number.isFinite(seconds)
+      ? new Date(Date.now() + seconds * 1000).toISOString()
+      : after && !Number.isNaN(Date.parse(after))
+        ? new Date(after).toISOString()
+        : undefined;
+    return runError("provider_rate_limited", "gateway HTTP 429", retryAt);
+  }
   if (!res.ok || !res.body) return runError("prompt_failed", `gateway HTTP ${res.status}`);
 
   const reader = res.body.getReader();
@@ -203,5 +269,7 @@ export async function gatewayRun(
   }
   if (buf.trim()) routeLine(buf);
 
-  return result ?? runError("gateway_unreachable", "gateway closed without a result line");
+  return result
+    ? normalizeRunFailure(result)
+    : runError("gateway_unreachable", "gateway closed without a result line");
 }

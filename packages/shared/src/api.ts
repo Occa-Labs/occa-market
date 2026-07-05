@@ -97,7 +97,16 @@ export type MessageUsage = { costUsd: number };
  */
 export type RuntimeResult =
   | { ok: true; blocks: OutputBlock[]; usage: MessageUsage }
-  | { ok: false; error: string; reason?: string };
+  | {
+      ok: false;
+      error: string;
+      reason?: string;
+      /**
+       * Present on provider_rate_limited when the backend's reset moment
+       * could be parsed — ISO timestamp the UI turns into "frees up around…".
+       */
+      retryAt?: string;
+    };
 
 /**
  * POST /api/agents/:id/messages response — the runtime result plus the session
@@ -119,6 +128,8 @@ export type SendMessageResponse =
       ok: false;
       error: string;
       reason?: string;
+      /** See RuntimeResult — provider capacity reset moment, when known. */
+      retryAt?: string;
       /**
        * Present when the holder gate blocked the run (error is hold_required
        * or budget_exhausted) — lets the client render the right card without
