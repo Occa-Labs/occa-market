@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import Script from "next/script";
 import "./globals.css";
 import { AppPrivyProvider } from "@/components/auth/app-privy-provider";
 import { AuthProvider } from "@/components/auth/auth-provider";
@@ -64,6 +65,18 @@ export default function RootLayout({
         <AppPrivyProvider>
           <AuthProvider>{children}</AuthProvider>
         </AppPrivyProvider>
+
+        {/* Google Analytics (gtag.js) — loads after hydration, never blocks paint. */}
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-1TDZXMZRPD"
+          strategy="afterInteractive"
+        />
+        <Script id="gtag-init" strategy="afterInteractive">
+          {`window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-1TDZXMZRPD');`}
+        </Script>
       </body>
     </html>
   );
