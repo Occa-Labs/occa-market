@@ -146,6 +146,14 @@ agentsRoutes.put(
       return;
     }
 
+    // Same holder gate as publishing (token doc §6.6): revising a listing is
+    // a creator action — dumping the tokens shouldn't keep the keys.
+    const gate = await checkPublishGate(req.user!.userId);
+    if (!gate.allowed) {
+      res.status(403).json({ ok: false, error: gate.code, standing: gate.standing });
+      return;
+    }
+
     const parsed = updateAgentBody.safeParse(req.body);
     if (!parsed.success) {
       const error = parsed.error.issues[0]?.message ?? "invalid body";

@@ -11,6 +11,7 @@
 import { Router } from "express";
 import type { GatewayHealthResponse } from "@occa-market/shared";
 import { asyncHandler } from "../../../lib/async-handler";
+import { requireAuth } from "../../../middleware/auth";
 import { gatewayHealth } from "../../../infra/gateway/client";
 import { gatewayTargetSchema } from "../domain/schemas";
 
@@ -19,6 +20,7 @@ export const gatewayRoutes = Router();
 // POST /api/agents/gateway/health
 gatewayRoutes.post(
   "/gateway/health",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const parsed = gatewayTargetSchema.safeParse(req.body);
     if (!parsed.success) {

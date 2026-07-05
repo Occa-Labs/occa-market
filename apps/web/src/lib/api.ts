@@ -167,7 +167,7 @@ export async function importSkill(
 ): Promise<{ ok: true; skill: AgentSkillInput } | { ok: false; error: string }> {
   const res = await fetch(`${base}/api/agents/skills/import`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...authHeaders() },
     body: JSON.stringify({ source }),
   });
   if (res.ok) {
@@ -185,7 +185,7 @@ export async function testGateway(
   try {
     const res = await fetch(`${base}/api/agents/gateway/health`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...authHeaders() },
       body: JSON.stringify(target),
     });
     if (!res.ok) {

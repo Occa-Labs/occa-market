@@ -6,6 +6,7 @@
 import { Router } from "express";
 import type { SkillImportResponse } from "@occa-market/shared";
 import { asyncHandler } from "../../../lib/async-handler";
+import { requireAuth } from "../../../middleware/auth";
 import {
   fetchGithubSkill,
   GithubSkillError,
@@ -26,6 +27,7 @@ const MESSAGES: Record<GithubSkillErrorCode, string> = {
 // POST /api/agents/skills/import
 skillsRoutes.post(
   "/skills/import",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const source = typeof req.body?.source === "string" ? req.body.source : "";
     if (!source.trim()) {
