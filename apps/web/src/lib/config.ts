@@ -15,8 +15,16 @@ const devWallets = (process.env.NEXT_PUBLIC_DEV_WALLETS ?? "")
   .filter(Boolean);
 
 export const config = {
-  /** Base URL of the API server (apps/server). */
-  apiBaseUrl: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000",
+  /**
+   * Base URL of the API server (apps/server). Server-side rendering may
+   * override with API_URL_INTERNAL (runtime env, never inlined into the
+   * bundle) to reach the API directly on localhost; browsers always use the
+   * public URL baked in at build time.
+   */
+  apiBaseUrl:
+    (typeof window === "undefined" ? process.env.API_URL_INTERNAL : undefined) ??
+    process.env.NEXT_PUBLIC_API_URL ??
+    "http://localhost:4000",
   /** Display-only welcome credit the chat seeds (server holds the real ledger). */
   welcomeCredit: Number.isFinite(welcomeCredit) ? welcomeCredit : 0.5,
   /** Privy app id (public). Empty string disables sign-in gracefully. */
