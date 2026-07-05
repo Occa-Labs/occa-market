@@ -23,6 +23,10 @@ function utcTime(iso: string): string {
   return `${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
 }
 
+function shortSig(sig: string): string {
+  return `${sig.slice(0, 4)}…${sig.slice(-4)}`;
+}
+
 function Rating({ value }: { value: number }) {
   if (value > 0) return <span className="text-fg">+1</span>;
   if (value < 0) return <span className="text-muted">−1</span>;
@@ -37,8 +41,9 @@ function AnchorStatus({ run, cluster }: { run: RunHistoryEntry; cluster: string 
         target="_blank"
         rel="noreferrer"
         className="text-link"
+        title={run.txSig}
       >
-        anchored
+        {shortSig(run.txSig)}
       </a>
     );
   }
