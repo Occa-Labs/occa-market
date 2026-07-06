@@ -23,6 +23,10 @@ const catalog: Record<string, () => Record<string, unknown>> = {
     command: "node",
     args: [`${env.mcpToolsDir}/secscan.mjs`],
   }),
+  chartlab: () => ({
+    command: "node",
+    args: [`${env.mcpToolsDir}/chartlab.mjs`],
+  }),
   // Vetted third-party servers — always version-pinned, never floating `-y pkg`.
   dexpaprika: () => ({
     command: "npx",

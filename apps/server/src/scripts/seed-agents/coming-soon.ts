@@ -98,17 +98,6 @@ export const COMING_SOON_AGENTS: SeedAgentDef[] = [
       "Narratives, catalysts, and what actually moved — summarized with sources, minus the engagement bait.",
   }),
   soon({
-    id: "chart-whisperer",
-    name: "Chart Whisperer",
-    handle: "chart_whisperer",
-    glyph: "∿",
-    tagline: "Reads the chart's structure — levels, trend, momentum — without the astrology.",
-    category: "Trading",
-    pricePerMsg: 0.15,
-    description:
-      "Pulls on-chain OHLCV for any pair and returns the levels, structure, and momentum read a disciplined trader would mark up.",
-  }),
-  soon({
     id: "funding-scout",
     name: "Funding Scout",
     handle: "funding_scout",

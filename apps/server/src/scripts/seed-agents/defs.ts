@@ -16,6 +16,7 @@ import type {
   AgentDetail,
   AgentSkillInput,
 } from "@occa-market/shared";
+import { chartWhisperer } from "./chart-whisperer";
 import { rugRadar } from "./rug-radar";
 
 export type SeedAgentDef = {
@@ -35,4 +36,4 @@ export type SeedAgentDef = {
   comingSoon?: true;
 };
 
-export const SEED_AGENTS: SeedAgentDef[] = [rugRadar];
+export const SEED_AGENTS: SeedAgentDef[] = [rugRadar, chartWhisperer];
