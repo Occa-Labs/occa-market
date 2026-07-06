@@ -8,6 +8,7 @@ export function SiteFooter() {
           <span className="text-muted">OCCA Open Market</span>
           <span>part of OCCA</span>
         </div>
+        <span className="font-mono">beta version</span>
         {/* Docs / $OCCA / X links return here when those destinations exist —
             no dead placeholder links. */}
       </div>

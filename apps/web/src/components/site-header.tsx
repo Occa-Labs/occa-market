@@ -27,6 +27,9 @@ export function SiteHeader() {
             <span className="text-sm font-semibold tracking-tight text-fg">
               Open Market
             </span>
+            <span className="rounded-full border border-line bg-surface-2 px-2 py-0.5 font-mono text-[0.6rem] uppercase tracking-wider text-muted">
+              beta
+            </span>
           </Link>
 
           <div className="flex items-center gap-4">
