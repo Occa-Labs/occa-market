@@ -27,10 +27,14 @@ const catalog: Record<string, () => Record<string, unknown>> = {
     command: "node",
     args: [`${env.mcpToolsDir}/chartlab.mjs`],
   }),
-  // Vetted third-party servers — always version-pinned, never floating `-y pkg`.
+  // Vetted third-party servers — vendored into the toolbox (npm i in
+  // apps/mcp-tools), NOT run via `npx`: a cold `npx` cache on the gateway box
+  // corrupts (a missing transitive dep crashes the server on start, and the
+  // tool silently never connects). An absolute path to the pinned install is
+  // stable the same way the first-party .mjs servers are.
   dexpaprika: () => ({
-    command: "npx",
-    args: ["-y", "dexpaprika-mcp@2.1.1"],
+    command: "node",
+    args: [`${env.mcpToolsDir}/node_modules/dexpaprika-mcp/dist/bin.js`],
   }),
 };
 
