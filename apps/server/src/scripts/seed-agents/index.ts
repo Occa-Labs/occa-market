@@ -23,6 +23,7 @@ import {
 import { ensureAgentOnchain } from "../../features/agents/services/onchain";
 import { buildSeedFiles } from "../../features/agents/services/runtime/seed";
 import { resolveCatalogTools } from "../../features/agents/services/runtime/tool-catalog";
+import { COMING_SOON_AGENTS } from "./coming-soon";
 import { SEED_AGENTS } from "./defs";
 
 // Same default accent the publish flow stamps (create-agent.ts).
@@ -38,15 +39,19 @@ async function main(): Promise<void> {
   }
 
   let failures = 0;
-  for (const def of SEED_AGENTS) {
+  for (const def of [...SEED_AGENTS, ...COMING_SOON_AGENTS]) {
     const tools = resolveCatalogTools(def.toolNames);
-    const runtime: AgentRuntimeInput = {
-      adapterType: "claude-code",
-      gatewayUrl: url,
-      apiKey: apiKey ?? undefined,
-      model: env.runtimeModel,
-      externalAgentId: `${def.id}-mkt01`,
-    };
+    // Coming-soon rows carry no runtime — that null is what renders the
+    // catalog card as "soon" (and clears the binding if one existed).
+    const runtime: AgentRuntimeInput | null = def.comingSoon
+      ? null
+      : {
+          adapterType: "claude-code",
+          gatewayUrl: url,
+          apiKey: apiKey ?? undefined,
+          model: env.runtimeModel,
+          externalAgentId: `${def.id}-mkt01`,
+        };
     const editorial = {
       name: def.name,
       handle: def.handle,
@@ -69,6 +74,11 @@ async function main(): Promise<void> {
     if (!agent) {
       console.error(`✗ ${def.id}: upsert failed`);
       failures++;
+      continue;
+    }
+
+    if (!runtime) {
+      console.log(`✓ ${def.id}: upserted as coming soon`);
       continue;
     }
 

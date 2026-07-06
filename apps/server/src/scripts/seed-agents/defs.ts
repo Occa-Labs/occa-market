@@ -31,6 +31,8 @@ export type SeedAgentDef = {
   skills: AgentSkillInput[];
   /** Names resolved against the tool catalog at seed time. */
   toolNames: string[];
+  /** Roadmap card only: upserted without a runtime, so it renders "soon". */
+  comingSoon?: true;
 };
 
 export const SEED_AGENTS: SeedAgentDef[] = [rugRadar];

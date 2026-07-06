@@ -37,13 +37,18 @@ function normalizeDetail(detail: AgentDetail): AgentDetail {
   };
 }
 
-// Seed agents first, then newest published agents.
+// Live agents first (coming-soon cards sink), then seed agents, then newest.
+// Availability is config-derived (runtime binding / ALLOWED_AGENTS), so that
+// leg of the ordering happens on the projection, not in SQL; the sort is
+// stable, so the seed/createdAt order holds within each group.
 export async function listAgents(): Promise<MarketAgent[]> {
   const rows = await db
     .select()
     .from(agents)
     .orderBy(desc(agents.seed), desc(agents.createdAt));
-  return rows.map(toMarketAgent);
+  return rows
+    .map(toMarketAgent)
+    .sort((a, b) => Number(b.available) - Number(a.available));
 }
 
 export async function getAgent(id: string): Promise<MarketAgent | null> {
