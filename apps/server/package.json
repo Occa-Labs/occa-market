@@ -11,6 +11,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/scripts/migrate.ts",
     "db:seed": "tsx src/scripts/seed-agents/index.ts",
+    "secrets:seal": "tsx src/scripts/seal-secrets.ts",
     "onchain:bootstrap": "tsx src/scripts/onchain-bootstrap.ts",
     "onchain:anchor": "tsx src/scripts/onchain-anchor.ts"
   },

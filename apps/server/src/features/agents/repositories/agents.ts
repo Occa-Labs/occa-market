@@ -13,6 +13,7 @@ import type {
   MarketAgent,
 } from "@occa-market/shared";
 import { db } from "../../../infra/database/client";
+import { decryptSecret, encryptSecret } from "../../../infra/crypto/secrets";
 import {
   agents,
   type AgentRow,
@@ -28,6 +29,31 @@ import { countAnchors, getLatestAnchor, listDayHistory } from "./anchors";
   of the app only ever sees the new shape — no data migration needed for a
   display-format change.
 */
+/*
+  Secret-bearing columns (tool_configs, runtime) are encrypted at rest via
+  infra/crypto. Seal on the way into the DB, open on the way out — every caller
+  above the repo sees plaintext, and the database only ever holds ciphertext
+  (or legacy plaintext, which passes through until the backfill seals it).
+*/
+function sealSecrets<T extends Partial<NewAgentRow>>(row: T): T {
+  const sealed = { ...row };
+  if (sealed.toolConfigs !== undefined) {
+    sealed.toolConfigs = encryptSecret(sealed.toolConfigs) as T["toolConfigs"];
+  }
+  if (sealed.runtime !== undefined) {
+    sealed.runtime = encryptSecret(sealed.runtime) as T["runtime"];
+  }
+  return sealed;
+}
+
+function openSecrets(row: AgentRow): AgentRow {
+  return {
+    ...row,
+    toolConfigs: decryptSecret(row.toolConfigs),
+    runtime: decryptSecret(row.runtime),
+  };
+}
+
 function normalizeDetail(detail: AgentDetail): AgentDetail {
   // jsonb rows predating the rework hold strings, whatever the type says.
   const raw = (detail.workflow ?? []) as (AgentWorkflowStep | string)[];
@@ -64,8 +90,10 @@ export async function getAgentDetail(id: string): Promise<AgentDetail | null> {
 export async function getAgentWithDetail(
   id: string,
 ): Promise<AgentWithDetail | null> {
-  const [row] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
-  if (!row) return null;
+  const [raw] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
+  if (!raw) return null;
+  // Open the runtime binding so the projection can read adapterType/model.
+  const row = openSecrets(raw);
   // Rank is standing, not storage: position within the category by earned
   // reputation, computed at read so it can never go stale.
   const [{ ahead }] = await db
@@ -117,7 +145,7 @@ export async function getAgentWithDetail(
  */
 export async function getAgentRow(id: string): Promise<AgentRow | null> {
   const [row] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
-  return row ?? null;
+  return row ? openSecrets(row) : null;
 }
 
 export async function agentExists(id: string): Promise<boolean> {
@@ -130,7 +158,7 @@ export async function agentExists(id: string): Promise<boolean> {
 }
 
 export async function insertAgent(row: NewAgentRow): Promise<MarketAgent> {
-  const [created] = await db.insert(agents).values(row).returning();
+  const [created] = await db.insert(agents).values(sealSecrets(row)).returning();
   return toMarketAgent(created);
 }
 
@@ -173,7 +201,7 @@ export async function updateAgentRow(
 ): Promise<MarketAgent | null> {
   const [updated] = await db
     .update(agents)
-    .set(patch)
+    .set(sealSecrets(patch))
     .where(eq(agents.id, id))
     .returning();
   return updated ? toMarketAgent(updated) : null;

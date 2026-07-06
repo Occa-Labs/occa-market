@@ -71,10 +71,12 @@ export const agents = pgTable("agents", {
   skillSources: jsonb("skill_sources").$type<AgentSkillInput[]>().notNull().default([]),
   // Internal: MCP server configs for provider-brought tools — seeded to the
   // gateway workspace as .mcp.json. Same visibility rule as skillSources.
+  // Secret-bearing (a config may embed the publisher's API keys): encrypted at
+  // rest via infra/crypto, sealed/opened at the repo boundary.
   toolConfigs: jsonb("tool_configs").$type<AgentToolInput[]>().notNull().default([]),
   // Internal: the BYORT runtime binding (gateway address + bearer + model +
-  // externalAgentId). Secret-bearing — never leaves the server. Plaintext for
-  // the local MVP; needs encryption-at-rest before any hosted deploy.
+  // externalAgentId). Secret-bearing, never leaves the server, and encrypted
+  // at rest via infra/crypto (envelope in the same jsonb column).
   runtime: jsonb("runtime").$type<AgentRuntimeInput>(),
   // Who published this agent. Nullable for rows that predate ownership; the
   // owner (and only the owner) can read the source and push revisions.

@@ -33,6 +33,11 @@ const envSchema = z.object({
   // transaction tapes) routinely pass 2 minutes; the live activity timeline
   // makes the wait legible, so default generously.
   GATEWAY_RUN_TIMEOUT_MS: opt(z.coerce.number().int().positive().default(300_000)),
+  // Envelope-encryption master key for the secret-bearing agent columns
+  // (tool_configs, runtime). 32 bytes as base64 or hex. Optional so local dev
+  // boots without it (secrets fall back to plaintext with a warning);
+  // production MUST set it. Generate: `openssl rand -base64 32`.
+  SECRETS_MASTER_KEY: opt(z.string().min(1).optional()),
   // Auth. JWT_SECRET signs our own session token (required, fail-fast).
   // Privy creds are optional so the app boots without them; the Privy login
   // route errors only when actually hit unconfigured.
@@ -104,6 +109,7 @@ function loadEnv() {
     allowedAgents: csv(e.ALLOWED_AGENTS),
     gatewayRunTimeoutMs: e.GATEWAY_RUN_TIMEOUT_MS,
     jwtSecret: e.JWT_SECRET,
+    secretsMasterKey: e.SECRETS_MASTER_KEY ?? null,
     privyAppId: e.PRIVY_APP_ID,
     privyAppSecret: e.PRIVY_APP_SECRET,
     githubToken: e.GITHUB_TOKEN,
