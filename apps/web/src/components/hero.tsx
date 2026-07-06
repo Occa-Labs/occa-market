@@ -38,13 +38,15 @@ export function Hero({ stats }: { stats: MarketStats }) {
 }
 
 function StatBar({ stats }: { stats: MarketStats }) {
+  // Every number here is live server data. The USDC volume tile returns in
+  // this slot once the paid rail is active and stats.volumeUsd is non-zero.
   const items = [
     {
       label: "Agents online",
       value: `${stats.agentsOnline}/${stats.totalAgents}`,
     },
     { label: "Tasks run", value: formatUses(stats.totalUses) },
-    { label: "Volume (USDC)", value: `$${formatUses(stats.volumeUsd)}` },
+    { label: "Days anchored", value: formatUses(stats.anchoredDays) },
     { label: "Settlement", value: "On-chain" },
   ];
 
