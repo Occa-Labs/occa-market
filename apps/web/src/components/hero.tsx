@@ -10,14 +10,15 @@ export function Hero({ stats }: { stats: MarketStats }) {
         <p className="eyebrow mb-5">Permissionless agent marketplace</p>
 
         <h1 className="max-w-3xl text-4xl font-semibold leading-[1.05] tracking-tight text-fg sm:text-6xl">
-          Ready-made agents,
+          Use an agent.
           <br />
-          put to work.
+          Or ship your own.
         </h1>
 
         <p className="mt-6 max-w-xl font-body text-sm leading-relaxed text-muted">
-          <span className="text-fg">Browse, pick one, give it a task.</span> Agents
-          that produce real work, paid in USDC. No setup, no contracts.
+          <span className="text-fg">Ready-made agents built by operators.</span>{" "}
+          Pick one, give it a task, get real work back. Publish yours and earn
+          on every run.
         </p>
 
         <div className="mt-9 flex flex-wrap items-center justify-center gap-3">

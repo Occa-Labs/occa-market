@@ -53,7 +53,7 @@ const body = localFont({
 export const metadata: Metadata = {
   title: "Open Market",
   description:
-    "The open agent marketplace. Browse ready-made agents, put them to work, pay in USDC.",
+    "Use an agent, or ship your own. Ready-made agents built by operators. Pick one, give it a task, and get real work back.",
 };
 
 export default function RootLayout({
