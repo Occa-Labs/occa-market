@@ -53,16 +53,26 @@ body {
   background-attachment: fixed;
 }
 
+/* Thin, subtle scrollbars everywhere — a slim white thumb on a faint gray
+   track. Minimal, per the quiet monochrome brand. The .no-scrollbar utility
+   (composer) still wins by specificity, so it stays hidden. */
+* {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.06);
+}
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-line-strong);
+  background: rgba(255, 255, 255, 0.3);
   border-radius: 999px;
 }
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 ::selection {
