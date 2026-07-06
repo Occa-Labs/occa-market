@@ -10,13 +10,8 @@ dist/
 next-env.d.ts
 *.tsbuildinfo
 
-# Internal docs & Claude workspace config — kept local, not for the public repo
-CLAUDE.md
+/*.md
 .claude/
-agent-marketplace-blueprint.md
-agent-marketplace-token.md
-demo-agent-degen-scout.md
-ape-check-concept.md
 
 # On-chain signer keypairs (devnet) — never commit
 .keys/
