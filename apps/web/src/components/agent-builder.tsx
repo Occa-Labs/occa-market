@@ -12,12 +12,13 @@ import {
   ChevronDown,
   GitBranch,
   Loader2,
+  Lock,
   Pencil,
   Plus,
   RefreshCw,
   X,
 } from "lucide-react";
-import { CATEGORIES, type AgentCategory } from "@occa-market/shared";
+import { CATEGORIES, type AgentCategory, type TokenStanding } from "@occa-market/shared";
 import {
   createAgent,
   getAgentSource,
@@ -48,6 +49,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { config } from "@/lib/config";
 import { useTokenStanding } from "@/components/token/use-token-standing";
+import { useAuth } from "@/components/auth/auth-provider";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
@@ -88,11 +90,26 @@ export function AgentBuilder({ editId }: { editId?: string } = {}) {
   const update: Update = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const last = STEPS.length - 1;
 
-  // Creator gate, checked up front (token doc §6.6): the server enforces it
-  // on publish/update anyway — this stops non-holders before the request.
-  const { standing } = useTokenStanding();
-  const holdGate =
-    Boolean(standing?.enforced) && !standing!.unmetered && standing!.tier === "none";
+  // Publisher gate, checked BEFORE the wizard (the server enforces it on
+  // publish anyway — this stops a non-holder before they fill anything out).
+  // New builds only: editing an agent you already own is never re-gated.
+  const { standing, refresh, refreshing } = useTokenStanding();
+  const { status, signIn } = useAuth();
+  const gateChecking =
+    !editing && (status === "loading" || (status === "authenticated" && standing === null));
+  const gateSignedOut =
+    !editing && (status === "unauthenticated" || status === "disabled");
+  const gateBlocked = !editing && standing !== null && !standing.canPublish;
+  const gated = gateChecking || gateSignedOut || gateBlocked;
+  // Edit keeps the lighter membership gate (not the 1M build bar): a soft
+  // block on the Save button + a banner, matching the server revise gate.
+  const editHoldGate =
+    editing &&
+    Boolean(standing?.enforced) &&
+    !standing!.unmetered &&
+    standing!.tier === "none";
+  // Whichever gate applies to the action's button (build front-gates instead).
+  const holdGate = editing ? editHoldGate : gateBlocked;
 
   // Edit mode hydrates from the server instead: fetch the agent's full
   // editable source (skill markdown and tool configs included) and prefill.
@@ -304,6 +321,15 @@ export function AgentBuilder({ editId }: { editId?: string } = {}) {
           : "Configure the agent and the gateway that powers it. A gateway runs on your own host and can power several of your agents — they share its uptime."}
       </p>
 
+      {gated ? (
+        <BuildGate
+          state={gateChecking ? "checking" : gateSignedOut ? "signedOut" : "blocked"}
+          standing={standing}
+          onSignIn={signIn}
+          onRefresh={refresh}
+          refreshing={refreshing}
+        />
+      ) : (
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[200px_1fr]">
         <Stepper current={step} onJump={setStep} />
 
@@ -328,10 +354,10 @@ export function AgentBuilder({ editId }: { editId?: string } = {}) {
             )}
           </div>
 
-          {step === last && holdGate && (
+          {step === last && editHoldGate && (
             <p className="mt-6 rounded-xl border border-line bg-surface-2 px-4 py-3 font-body text-[13px] leading-relaxed text-muted">
-              Publishing is for $OCCA holders — hold at least 0.05% of supply
-              (500,000 $OCCA) to list an agent.{" "}
+              Saving changes needs $OCCA — hold at least 0.05% of supply
+              (500,000 $OCCA) to keep your listing.{" "}
               <a
                 href={config.occaTokenUrl}
                 target="_blank"
@@ -378,7 +404,100 @@ export function AgentBuilder({ editId }: { editId?: string } = {}) {
           </div>
         </div>
       </div>
+      )}
     </div>
+  );
+}
+
+/* ── Publisher gate ───────────────────────────────────────────── */
+
+/**
+ * Shown in place of the wizard on a new build until the provider clears the
+ * publisher bar. Three states: still checking standing, signed out, or below
+ * the $OCCA threshold. Editing an agent you own never hits this.
+ */
+function BuildGate({
+  state,
+  standing,
+  onSignIn,
+  onRefresh,
+  refreshing,
+}: {
+  state: "checking" | "signedOut" | "blocked";
+  standing: TokenStanding | null;
+  onSignIn: () => void;
+  onRefresh: () => void;
+  refreshing: boolean;
+}) {
+  if (state === "checking") {
+    return (
+      <div className="mt-8 flex min-h-[280px] items-center justify-center">
+        <Loader2 size={20} className="animate-spin text-faint" />
+      </div>
+    );
+  }
+
+  const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
+  const publishMin = standing?.publishMin ?? 1_000_000;
+
+  return (
+    <Card className="mx-auto mt-8 max-w-lg p-8 text-center">
+      <div className="spotlight mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-line text-fg">
+        <Lock size={18} />
+      </div>
+
+      {state === "signedOut" ? (
+        <>
+          <h2 className="mt-5 text-base font-semibold text-fg">
+            Sign in to build an agent
+          </h2>
+          <p className="mx-auto mt-2 max-w-sm font-body text-[13px] leading-relaxed text-muted">
+            Publishing an agent is for $OCCA holders. Sign in with your wallet
+            so we can check your standing before you start.
+          </p>
+          <Button size="md" className="mt-6" onClick={onSignIn}>
+            Sign in
+          </Button>
+        </>
+      ) : (
+        <>
+          <h2 className="mt-5 text-base font-semibold text-fg">
+            Publishing needs {fmt(publishMin)} $OCCA
+          </h2>
+          <p className="mx-auto mt-2 max-w-sm font-body text-[13px] leading-relaxed text-muted">
+            Listing an agent is reserved for $OCCA holders, so we gate it before
+            you spend time configuring one. Reach the threshold and this whole
+            flow opens up.
+          </p>
+
+          {standing && (
+            <div className="mx-auto mt-6 max-w-xs space-y-2 font-mono text-xs">
+              <div className="flex items-center justify-between border-b border-line pb-2">
+                <span className="text-faint">You hold</span>
+                <span className="tabular-nums text-fg">{fmt(standing.balance)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-faint">Still needed</span>
+                <span className="tabular-nums text-warn">{fmt(standing.toPublish)}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 flex items-center justify-center gap-3">
+            <Button size="md" href={config.occaTokenUrl} target="_blank" rel="noreferrer">
+              Get $OCCA
+            </Button>
+            <Button size="md" variant="secondary" onClick={onRefresh} disabled={refreshing}>
+              <RefreshCw
+                size={14}
+                className={cn("mr-1.5", refreshing && "animate-spin")}
+              />
+              {refreshing ? "Checking…" : "I bought — recheck"}
+            </Button>
+          </div>
+        </>
+      )}
+    </Card>
   );
 }
 

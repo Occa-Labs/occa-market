@@ -24,7 +24,7 @@ import {
   listAgentsByOwner,
 } from "../repositories/agents";
 import { createAgentBody, updateAgentBody } from "../domain/schemas";
-import { checkPublishGate } from "../../token/services/standing";
+import { checkPublishGate, checkReviseGate } from "../../token/services/standing";
 import { publishAgent } from "../services/create-agent";
 import { reviseAgent } from "../services/update-agent";
 
@@ -64,8 +64,9 @@ agentsRoutes.post(
       return;
     }
 
-    // Creator gate (token doc §6.6): listing requires holding the membership
-    // line. Skin in the game is the spam filter.
+    // Builder gate: publishing a new agent requires the 1M publisher bar.
+    // The client front-gates the wizard on the same standing, so this is the
+    // backstop. Skin in the game is the spam filter.
     const gate = await checkPublishGate(req.user!.userId);
     if (!gate.allowed) {
       res.status(403).json({ ok: false, error: gate.code, standing: gate.standing });
@@ -146,9 +147,10 @@ agentsRoutes.put(
       return;
     }
 
-    // Same holder gate as publishing (token doc §6.6): revising a listing is
-    // a creator action — dumping the tokens shouldn't keep the keys.
-    const gate = await checkPublishGate(req.user!.userId);
+    // Revising a listing keeps the lighter membership gate, not the 1M
+    // build bar — dumping every token shouldn't keep the keys, but editing
+    // what you own shouldn't demand the full builder stake either.
+    const gate = await checkReviseGate(req.user!.userId);
     if (!gate.allowed) {
       res.status(403).json({ ok: false, error: gate.code, standing: gate.standing });
       return;

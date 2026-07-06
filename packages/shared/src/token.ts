@@ -43,6 +43,20 @@ export const TRIAL_DAILY_BUDGET = 3;
 export const TRIAL_WEEKLY_BUDGET = 10;
 
 /*
+  The publisher bar — listing an agent requires a heavier hold than the
+  membership line that governs chat budgets. 0.1% of supply = 1,000,000 on a
+  1B supply: above Entry (0.05%), below Pro (0.5%). This is a publish-specific
+  threshold, NOT a tier line. agent-marketplace-token.md §6.6 still states the
+  old membership bar — update the doc when this ships.
+*/
+export const PUBLISH_MIN_PCT = 0.001;
+
+/** Minimum $OCCA (in tokens) to publish, for a given total supply. */
+export function publishMinTokens(totalSupply: number): number {
+  return PUBLISH_MIN_PCT * totalSupply;
+}
+
+/*
   Paid usage (blueprint §5, revised 2026-07-06): the platform fee rides ON TOP
   of the listed price and is paid by the consumer — the provider always
   receives their listed price in full. Holder tiers discount the fee, never
@@ -94,6 +108,16 @@ export type TokenStanding = {
   toMembership: number;
   /** Below the membership line — the budgets below are the free trial. */
   trial: boolean;
+  /** The publisher bar in tokens (heavier than membership) — for display. */
+  publishMin: number;
+  /** Tokens still missing to reach the publisher bar (0 once cleared). */
+  toPublish: number;
+  /**
+   * May this holder publish an agent? Folds in enforcement and dev bypass:
+   * true when the gate is off, the wallet is unmetered, or the balance clears
+   * the publisher bar. The build flow gates on exactly this.
+   */
+  canPublish: boolean;
   /** Free messages per day (trial or tier). */
   dailyBudget: number;
   /** Messages consumed since today started (00:00 UTC). */

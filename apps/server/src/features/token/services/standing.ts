@@ -14,6 +14,7 @@ import {
   MEMBERSHIP_PCT,
   TRIAL_DAILY_BUDGET,
   TRIAL_WEEKLY_BUDGET,
+  publishMinTokens,
   tierForSupplyPct,
   tierSpec,
   type TokenStanding,
@@ -46,6 +47,8 @@ export async function standingForUser(
     countUsedToday(user.id),
     countUsedThisWeek(user.id),
   ]);
+  const unmetered = isDevWallet(user);
+  const publishMin = publishMinTokens(env.token.totalSupply);
 
   return {
     tier,
@@ -54,6 +57,9 @@ export async function standingForUser(
     supplyPct,
     toMembership: Math.max(0, MEMBERSHIP_PCT * env.token.totalSupply - balance),
     trial,
+    publishMin,
+    toPublish: Math.max(0, publishMin - balance),
+    canPublish: !env.token.gateEnabled || unmetered || balance >= publishMin,
     dailyBudget,
     usedToday,
     remainingToday: Math.max(0, dailyBudget - usedToday),
@@ -64,7 +70,7 @@ export async function standingForUser(
     feeDiscount: spec?.feeDiscount ?? 0,
     weekResetAt: weekResetAt().toISOString(),
     checkedAt: checkedAt?.toISOString() ?? null,
-    unmetered: isDevWallet(user),
+    unmetered,
     enforced: env.token.gateEnabled,
   };
 }
@@ -107,8 +113,32 @@ export async function checkMessageGate(userId: string): Promise<GateResult> {
   return { allowed: true, metered: true };
 }
 
-/** Publish gate (token doc §6.6): listing an agent requires membership. */
+/**
+ * Publish gate (NEW builds): listing a fresh agent requires the publisher bar
+ * (PUBLISH_MIN_PCT = 1,000,000 $OCCA on a 1B supply) — heavier than the chat
+ * membership line, so a builder doesn't configure a whole agent only to be
+ * turned away. canPublish already folds in enforcement and the dev bypass.
+ */
 export async function checkPublishGate(userId: string): Promise<GateResult> {
+  if (!env.token.gateEnabled) return { allowed: true, metered: false };
+
+  const user = await findUserById(userId);
+  if (!user) return { allowed: true, metered: false };
+
+  const standing = await standingForUser(user);
+  if (!standing.canPublish) {
+    return { allowed: false, code: "hold_required", standing };
+  }
+  return { allowed: true, metered: false };
+}
+
+/**
+ * Revise gate (EDITS to an existing listing): stays at the original
+ * membership line, NOT the heavier publish bar — revising what you already
+ * own shouldn't demand the full builder stake, only that you still hold
+ * (dumping every token shouldn't keep the keys).
+ */
+export async function checkReviseGate(userId: string): Promise<GateResult> {
   if (!env.token.gateEnabled) return { allowed: true, metered: false };
 
   const user = await findUserById(userId);
