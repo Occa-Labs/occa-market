@@ -437,9 +437,11 @@ export function AgentChat({
         )}
 
         <div className="mx-auto w-full min-w-0 max-w-3xl">
-          {/* session strip — mobile */}
+          {/* session strip — mobile. Hidden scrollbar: it's a swipe row of
+              pills, and mobile browsers render a chunky overlay bar that
+              ignores the thin ::-webkit-scrollbar sizing anyway. */}
           {showSessions && (
-            <div className="mb-4 flex items-center gap-2 overflow-x-auto pb-1 lg:hidden">
+            <div className="no-scrollbar mb-4 flex items-center gap-2 overflow-x-auto lg:hidden">
               <button
                 type="button"
                 onClick={newChat}
