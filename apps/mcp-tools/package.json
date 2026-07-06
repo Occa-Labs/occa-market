@@ -1,0 +1,7 @@
+{
+  "name": "@occa-market/mcp-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "First-party MCP stdio servers for OCCA seed agents — deployed to the gateway box, referenced by the server's tool catalog."
+}

@@ -69,6 +69,14 @@ const envSchema = z.object({
   TOKEN_CACHE_TTL_MS: opt(z.coerce.number().int().positive().default(600_000)),
   // Dev/admin wallets (CSV): unmetered, bypass hold + budget gates.
   DEV_WALLETS: opt(z.string().default("")),
+  // First-party MCP toolbox — where apps/mcp-tools lives ON THE GATEWAY BOX.
+  // The tool catalog bakes this path into seed-agent .mcp.json configs, so it
+  // must be the path the gateway's `node` resolves, not a path on this host.
+  MCP_TOOLS_DIR: opt(z.string().default("/opt/occa/mcp-tools")),
+  // Gateway that runs OCCA's own seed agents (the db:seed script). Optional —
+  // without them seeding fails fast with a readable message instead of at boot.
+  SEED_GATEWAY_URL: opt(z.string().url().optional()),
+  SEED_GATEWAY_API_KEY: opt(z.string().min(1).optional()),
   // Paid-usage credits (USDC, mainnet — same RPC as the token block).
   // Deposits only activate once the market's receiving wallet is set.
   DEPOSIT_WALLET: opt(z.string().min(32).optional()),
@@ -117,6 +125,11 @@ function loadEnv() {
       totalSupply: e.TOKEN_TOTAL_SUPPLY,
       cacheTtlMs: e.TOKEN_CACHE_TTL_MS,
       devWallets: csv(e.DEV_WALLETS),
+    },
+    mcpToolsDir: e.MCP_TOOLS_DIR,
+    seedGateway: {
+      url: e.SEED_GATEWAY_URL ?? null,
+      apiKey: e.SEED_GATEWAY_API_KEY ?? null,
     },
     credits: {
       depositWallet: e.DEPOSIT_WALLET ?? null,
