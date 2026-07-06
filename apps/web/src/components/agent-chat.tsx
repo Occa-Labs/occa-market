@@ -322,24 +322,26 @@ export function AgentChat({
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-8 sm:px-6">
-      {/* chat header — identity + holder standing */}
-      <div className="mb-5 flex items-center justify-between gap-3">
+      {/* chat header — identity + holder standing. flex-wrap so the standing
+          pills drop to a second row on a phone instead of squeezing the name
+          into a two-line wrap. */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <Link
           href={`/agents/${agent.id}`}
-          className="flex items-center gap-2.5 font-mono text-xs text-muted transition-colors hover:text-fg"
+          className="flex min-w-0 items-center gap-2.5 font-mono text-xs text-muted transition-colors hover:text-fg"
         >
-          <ArrowLeft size={14} className="text-faint" />
-          <span className="spotlight flex h-8 w-8 items-center justify-center rounded-lg border border-line text-sm text-fg">
+          <ArrowLeft size={14} className="flex-none text-faint" />
+          <span className="spotlight flex h-8 w-8 flex-none items-center justify-center rounded-lg border border-line text-sm text-fg">
             {agent.glyph}
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="text-sm font-semibold text-fg">{agent.name}</span>
-            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-sm font-semibold text-fg">{agent.name}</span>
+            <span className="h-1.5 w-1.5 flex-none rounded-full bg-accent" />
           </span>
         </Link>
 
         {!signedOut && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {activeSession && (
               <ShareSession
                 agent={agent}
@@ -434,7 +436,7 @@ export function AgentChat({
           </aside>
         )}
 
-        <div className="mx-auto w-full max-w-3xl">
+        <div className="mx-auto w-full min-w-0 max-w-3xl">
           {/* session strip — mobile */}
           {showSessions && (
             <div className="mb-4 flex items-center gap-2 overflow-x-auto pb-1 lg:hidden">

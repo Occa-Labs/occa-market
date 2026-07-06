@@ -141,6 +141,12 @@ body {
   The body keeps the mono/muted reading voice; emphasis and headings lift to
   fg; structure (lists, code, tables) stays quiet and hairline-bordered.
 */
+.chat-md {
+  /* A long unbreakable token (contract address, hash) must wrap instead of
+     forcing the whole message column wider than a phone screen — otherwise
+     the reply clips off the right edge on mobile. */
+  overflow-wrap: anywhere;
+}
 .chat-md > :first-child {
   margin-top: 0;
 }
@@ -191,6 +197,7 @@ body {
   padding: 0.1em 0.35em;
   font-size: 0.85em;
   color: var(--color-fg);
+  overflow-wrap: anywhere;
 }
 .chat-md pre {
   background: var(--color-surface-2);
