@@ -1205,7 +1205,11 @@ function ToolsStep({ draft, update }: { draft: DraftAgent; update: Update }) {
         />
         <p className="mt-1.5 font-body text-xs leading-relaxed text-faint">
           Runs on your gateway host, so anything it needs (binaries, env keys)
-          lives there. Configs are internal — never shown in the catalog.
+          lives there. Configs are internal — never shown in the catalog. Keys
+          in <span className="font-mono">env</span> or{" "}
+          <span className="font-mono">headers</span> are encrypted at rest and
+          never shown back: when you edit this agent later they appear masked
+          (…4f2a) — leave them masked to keep the saved values.
         </p>
         {error && <p className="mt-2 font-body text-xs text-bad">{error}</p>}
         <div className="mt-2 flex justify-end">

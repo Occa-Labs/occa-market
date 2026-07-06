@@ -12,6 +12,7 @@ import { getAgentRow, updateAgentRow } from "../repositories/agents";
 import type { UpdateAgentBody } from "../domain/schemas";
 import { buildDetail, type PublishResult } from "./create-agent";
 import { buildSeedFiles } from "./runtime/seed";
+import { restoreToolSecrets } from "./tool-secrets";
 
 export async function reviseAgent(
   id: string,
@@ -26,6 +27,13 @@ export async function reviseAgent(
     ...input.runtime,
     apiKey: input.runtime.apiKey ?? row.runtime?.apiKey,
   };
+
+  // Same write-only contract for tool configs: the source endpoint masks
+  // env/header values, so a still-masked value here means "keep the stored
+  // one" — swap the real secrets back in before saving or seeding.
+  const restored = restoreToolSecrets(input.tools, row.toolConfigs);
+  if (!restored.ok) return { ok: false, error: restored.error };
+  input = { ...input, tools: restored.tools };
 
   const detail = {
     ...buildDetail(input),

@@ -27,6 +27,7 @@ import { createAgentBody, updateAgentBody } from "../domain/schemas";
 import { checkPublishGate, checkReviseGate } from "../../token/services/standing";
 import { publishAgent } from "../services/create-agent";
 import { reviseAgent } from "../services/update-agent";
+import { maskToolConfigs } from "../services/tool-secrets";
 
 export const agentsRoutes = Router();
 
@@ -89,8 +90,10 @@ agentsRoutes.post(
 );
 
 // GET /api/agents/:id/source — the editable source, for the edit wizard.
-// Internal content included (skill markdown, tool configs); the runtime's
-// apiKey is withheld — leaving it blank on update keeps the stored one.
+// Internal content included (skill markdown, tool configs). Secrets are
+// write-only: the runtime's apiKey is withheld (blank on update = keep), and
+// tool-config env/header values come back masked — resubmitting the mask
+// keeps the stored value.
 agentsRoutes.get(
   "/:id/source",
   requireAuth,
@@ -114,7 +117,7 @@ agentsRoutes.get(
         persona: row.detail.longDescription,
         pricePerMsg: row.pricePerMsg,
         skills: row.skillSources,
-        tools: row.toolConfigs,
+        tools: maskToolConfigs(row.toolConfigs),
         // pre-rework rows store steps as plain strings — same normalization
         // the public detail read applies
         workflow: (row.detail.workflow ?? []).map((s) =>

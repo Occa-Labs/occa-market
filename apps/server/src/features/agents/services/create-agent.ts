@@ -15,6 +15,7 @@ import { agentExists, getAgentRow, insertAgent } from "../repositories/agents";
 import type { CreateAgentBody, UpdateAgentBody } from "../domain/schemas";
 import { ensureAgentOnchain } from "./onchain";
 import { buildSeedFiles } from "./runtime/seed";
+import { restoreToolSecrets } from "./tool-secrets";
 
 const DEFAULT_ACCENT = "#2ee6d6";
 
@@ -88,6 +89,12 @@ export async function publishAgent(
   const id = slugify(input.handle);
   if (!id) return { ok: false, error: "handle must contain letters or numbers" };
   if (await agentExists(id)) return { ok: false, error: "handle already taken" };
+
+  // A fresh publish has no stored secrets to fall back on, so a masked
+  // env/header value (pasted from elsewhere) would be saved literally and
+  // break the tool. Reject it with the real ask instead.
+  const guarded = restoreToolSecrets(input.tools, []);
+  if (!guarded.ok) return { ok: false, error: guarded.error };
 
   const detail = buildDetail(input);
   const row: NewAgentRow = {
