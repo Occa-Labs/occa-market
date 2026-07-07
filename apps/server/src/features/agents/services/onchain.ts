@@ -16,6 +16,7 @@
 import type { AgentRow } from "../../../infra/database/schema";
 import {
   commitDailyAnchorOnchain,
+  dailyAnchorExists,
   onchainEnabled,
   registerAgentOnchain,
 } from "../../../infra/onchain/client";
@@ -88,6 +89,28 @@ export async function runDailyAnchors(): Promise<number> {
           }),
         );
         const root = merkleRoot(leaves);
+        // The chain is the source of truth for what's committed. If this day's
+        // anchor PDA already exists on-chain, a prior sweep committed it but
+        // the local mirror never got the row — a crash between the commit and
+        // the insert (they're not atomic), or a reset dev DB. Re-initing the
+        // PDA fails with "already in use", so backfill the mirror and move on:
+        // the sweep self-heals instead of erroring every hour. The recomputed
+        // root can drift from the on-chain one if the day's messages changed
+        // since; the chain stays authoritative, this row is just the UI/dedup
+        // mirror (txSig unknown — the commit predates this backfill).
+        if (await dailyAnchorExists(agent.onchain!.deploymentPda, dayUnix)) {
+          await insertDailyAnchor({
+            agentId: agent.id,
+            dayUnix,
+            merkleRoot: root.toString("hex"),
+            taskCount: exchanges.length,
+            txSig: "",
+          });
+          console.log(
+            `[onchain] ${agent.id} day ${new Date(dayUnix * 1000).toISOString().slice(0, 10)} already anchored on-chain — mirror backfilled`,
+          );
+          continue;
+        }
         const txSig = await commitDailyAnchorOnchain(
           agent.onchain!.deploymentPda,
           dayUnix,

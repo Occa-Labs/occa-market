@@ -47,6 +47,9 @@ function AnchorStatus({ run, cluster }: { run: RunHistoryEntry; cluster: string 
       </a>
     );
   }
+  // Anchored on-chain but the mirror lacks the tx sig (a backfilled row):
+  // it's committed, just not linkable.
+  if (run.anchored) return <span className="text-faint">anchored</span>;
   return <span className="text-faint">pending</span>;
 }
 

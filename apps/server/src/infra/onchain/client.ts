@@ -184,6 +184,20 @@ export async function registerAgentOnchain(
 }
 
 /**
+ * Whether a deployment's daily-anchor PDA already exists on-chain. The sweep
+ * uses this to stay idempotent against the chain: if the anchor is already
+ * committed, it must not re-init the account (that fails "already in use").
+ */
+export async function dailyAnchorExists(
+  deploymentPda: string,
+  dayUnix: number,
+): Promise<boolean> {
+  const { connection } = ctx();
+  const pda = deriveDailyAnchorPda(new PublicKey(deploymentPda), dayUnix);
+  return Boolean(await connection.getAccountInfo(pda));
+}
+
+/**
  * Commit one day's Merkle root for a deployment. `dayUnix` must be a UTC
  * midnight; the program enforces one anchor per (deployment, day) via the
  * PDA seed. Returns the tx signature.

@@ -182,6 +182,8 @@ export function AgentDetail({
                           >
                             anchored
                           </a>
+                        ) : day.anchored ? (
+                          <span className="text-faint">anchored</span>
                         ) : (
                           <span className="text-faint">pending</span>
                         )}
