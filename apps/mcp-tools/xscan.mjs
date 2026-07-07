@@ -40,7 +40,10 @@ const ALCHEMY_RPC = ALCHEMY_KEY
 // token can't run the bill up (each page is 20 tweets, ~$0.003). Tune against
 // real scans — these bound cost to roughly $0.03–0.06 per token_social run.
 const WINDOWS = { "1h": 3600, "24h": 86_400, "7d": 604_800 };
-const WINDOW_PAGES = { "1h": 1, "24h": 2, "7d": 3 };
+// 7d runs deep because the caller roster is built from it — a heavily-shilled
+// token easily blows past a couple of pages, and a notable voice can sit on
+// page 4+. Still bounded so cost stays well inside the price.
+const WINDOW_PAGES = { "1h": 1, "24h": 3, "7d": 6 };
 
 // Caller-quality thresholds (the primitive DEFINITION of "low quality"; the
 // skill decides what a given share MEANS). From the concept: tiny, brand-new,
@@ -102,6 +105,22 @@ const hoursSince = (s) => (Date.now() - tms(s)) / 3_600_000;
 const round = (n, p = 1) => Math.round(n * 10 ** p) / 10 ** p;
 
 const isKol = (userName) => KOL_SET.has(String(userName || "").toLowerCase());
+
+/*
+  Conservative machine-generated-handle detector — a bot tell the follow-ratio
+  check misses, since aged bots keep normal ratios. Tuned for ZERO false
+  positives over real handles (0x-prefixed devs, leetspeak like L1quid, trailing
+  years like name78) at the cost of missing the softer cases. It flags the clear
+  ones: scattered digit insertion, and unpronounceable consonant-cluster endings
+  (…fgks, …lnj, …fsd).
+*/
+function generatedHandle(userName) {
+  const s = String(userName || "").toLowerCase().replace(/^0x/, "").replace(/_/g, "");
+  const digits = (s.match(/[0-9]/g) || []).length;
+  if (digits >= 2 && /[0-9][a-z]/.test(s)) return true;
+  const base = s.replace(/[0-9]+$/, "");
+  return /[bcdfghjklmnpqrstvwxyz]{3,}$/.test(base);
+}
 
 /* ---------------------------------------------------------- discovery -- */
 
@@ -234,10 +253,21 @@ async function accountPulse(handle) {
   let posts7d = null;
   let hoursSinceLast = null;
   try {
-    const last = await tw("/twitter/user/last_tweets", { userName: handle });
-    const tweets = last?.tweets ?? [];
+    // userId (from the info call) is the reliable key for last_tweets — a
+    // userName lookup can come back empty even on an active account.
+    // includeReplies so replies/RTs count as liveness (an account that only
+    // replies is still active); the originals-only default can read empty.
+    const last = await tw("/twitter/user/last_tweets", {
+      ...(u.id ? { userId: u.id } : { userName: handle }),
+      includeReplies: "true",
+    });
+    // last_tweets nests the array under data.tweets (unlike advanced_search,
+    // which is top-level); fall back to top-level in case the shape drifts.
+    const tweets = last?.data?.tweets ?? last?.tweets ?? [];
     if (tweets.length > 0) {
-      hoursSinceLast = round(hoursSince(tweets[0].createdAt), 1);
+      // Newest by timestamp, not array order — a pinned tweet can sit first.
+      const newest = Math.max(...tweets.map((t) => tms(t.createdAt)).filter((x) => !Number.isNaN(x)));
+      hoursSinceLast = round((Date.now() - newest) / 3_600_000, 1);
       posts7d = tweets.filter((t) => daysSince(t.createdAt) <= 7).length;
       // Cap-aware: if the whole page is inside 7d there may be more.
       if (posts7d === tweets.length && last.has_next_page) posts7d = `${posts7d}+`;
@@ -304,22 +334,26 @@ function callerStats(tweets) {
   const callers = [...byId.values()].map((a) => {
     const followers = a.followers ?? 0;
     const following = a.following ?? 0;
+    const age_days = round(daysSince(a.createdAt), 0);
+    const ratio = round(following / (followers + 1), 2);
     return {
       userName: a.userName,
       followers,
-      age_days: round(daysSince(a.createdAt), 0),
+      age_days,
       verified: Boolean(a.isBlueVerified),
-      following_followers_ratio: round(following / (followers + 1), 2),
+      following_followers_ratio: ratio,
+      // Per-caller quality traits, split so the skill can tell a fresh-account
+      // swarm (a real coordination tell) from merely small accounts (weak).
+      fresh: age_days < FRESH_DAYS,
+      bot_shaped: ratio > BOT_RATIO,
+      generated: generatedHandle(a.userName),
+      tiny: followers < TINY_FOLLOWERS,
       kol_hit: isKol(a.userName),
     };
   });
 
-  const lowQuality = callers.filter(
-    (c) =>
-      c.followers < TINY_FOLLOWERS ||
-      c.age_days < FRESH_DAYS ||
-      c.following_followers_ratio > BOT_RATIO,
-  ).length;
+  const n = callers.length;
+  const share = (pred) => (n ? round(callers.filter(pred).length / n, 2) : 0);
 
   // Log-weighted reach so 200 nano-accounts never outweigh a few real ones.
   const reach = round(
@@ -328,12 +362,19 @@ function callerStats(tweets) {
   );
 
   return {
-    unique_authors: callers.length,
-    low_quality_share: callers.length ? round(lowQuality / callers.length, 2) : 0,
+    unique_authors: n,
+    // Coordination-relevant splits: fresh/bot signal a manufactured push; tiny
+    // alone is just a small-cap crowd. low_quality_share is their union.
+    fresh_share: share((c) => c.fresh),
+    // "bot-like" = an extreme follow ratio OR a machine-generated-looking
+    // handle; the latter catches aged bots the ratio alone misses.
+    bot_share: share((c) => c.bot_shaped || c.generated),
+    tiny_share: share((c) => c.tiny),
+    low_quality_share: share((c) => c.fresh || c.bot_shaped || c.generated || c.tiny),
     weighted_reach: reach,
     kol_hits: callers.filter((c) => c.kol_hit).map((c) => c.userName),
     // Top callers by followers, trimmed so the model isn't drowned.
-    top_callers: callers.sort((a, b) => b.followers - a.followers).slice(0, 15),
+    top_callers: callers.sort((a, b) => b.followers - a.followers).slice(0, 20),
   };
 }
 
@@ -344,8 +385,16 @@ async function tokenSocial({ mint }) {
 
   const disc = await discoverHandle(mint);
   const symbol = disc.symbol;
-  // CA is unique/low-noise; add the ticker so an on-fire cashtag is caught too.
-  const term = symbol ? `"${mint}" OR "$${symbol}"` : `"${mint}"`;
+  // The cashtag ($TICKER) is how X actually tags a token, so that's where the
+  // shill volume lives — lead with it. The CA is the low-noise confirm that few
+  // besides die-hards ever post. Quote the ticker only if it isn't a clean
+  // cashtag (letters/digits); the CA is always quoted (exact match).
+  const ticker = symbol
+    ? /^[A-Za-z0-9]+$/.test(symbol)
+      ? `$${symbol}`
+      : `"$${symbol}"`
+    : null;
+  const term = ticker ? `${ticker} OR "${mint}"` : `"${mint}"`;
 
   // Account profile (only if we found a handle) and the three windows, parallel.
   // Everything here is best-effort: a twitter outage leaves the discovered
@@ -361,8 +410,11 @@ async function tokenSocial({ mint }) {
   ]);
 
   const count = (w) => (w.error ? "unavailable" : w.hasMore ? `${w.tweets.length}+` : w.tweets.length);
-  // Caller quality is read off the 24h crowd — recent and broad enough to judge.
-  const callers = callerStats(w24h.tweets);
+  // Roster + quality are read off the 7d crowd so notable voices that posted
+  // earlier in the week are captured, not just the last 24h; the velocity block
+  // above still carries the recent-spike timing.
+  const callers = callerStats(w7d.tweets);
+  const uniqueAuthors24h = new Set(w24h.tweets.map((t) => t.author?.id).filter(Boolean)).size;
   const mentionsError = w1h.error && w24h.error && w7d.error ? w24h.error : undefined;
 
   return {
@@ -380,7 +432,7 @@ async function tokenSocial({ mint }) {
       mentions_1h: count(w1h),
       mentions_24h: count(w24h),
       mentions_7d: count(w7d),
-      unique_authors_24h: callers.unique_authors,
+      unique_authors_24h: uniqueAuthors24h,
       ...(mentionsError ? { unavailable: mentionsError } : {}),
     },
     callers,
@@ -388,7 +440,7 @@ async function tokenSocial({ mint }) {
     meta: {
       query: term,
       window_page_caps: WINDOW_PAGES,
-      note: "counts suffixed with + hit the page cap and are floors; KOL hits are a curated-list membership check, not a judgment",
+      note: "mention counts suffixed with + hit the page cap and are floors; caller shares + roster span the 7d window; KOL hits are a curated-list membership check, not a judgment",
     },
   };
 }
