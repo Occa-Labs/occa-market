@@ -27,6 +27,13 @@ const catalog: Record<string, () => Record<string, unknown>> = {
     command: "node",
     args: [`${env.mcpToolsDir}/chartlab.mjs`],
   }),
+  // Attention pillar for Ape Check. TWITTERAPI_KEY + ALCHEMY_KEY are read from
+  // the gateway box's own environment by xscan.mjs — deliberately NOT injected
+  // here, so no key ever lands in an agent row or the seeded .mcp.json.
+  xscan: () => ({
+    command: "node",
+    args: [`${env.mcpToolsDir}/xscan.mjs`],
+  }),
   // Vetted third-party servers — vendored into the toolbox (npm i in
   // apps/mcp-tools), NOT run via `npx`: a cold `npx` cache on the gateway box
   // corrupts (a missing transitive dep crashes the server on start, and the
