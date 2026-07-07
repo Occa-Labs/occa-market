@@ -3,7 +3,12 @@
   into the instruction the model runs under. Pure: data in, string out.
 */
 
-import type { AgentDetail, MarketAgent } from "@occa-market/shared";
+import type {
+  AgentDetail,
+  Candle,
+  MarketAgent,
+  OutputBlock,
+} from "@occa-market/shared";
 
 export function systemPrompt(agent: MarketAgent, detail: AgentDetail): string {
   return [
@@ -49,12 +54,68 @@ export function systemPrompt(agent: MarketAgent, detail: AgentDetail): string {
   ].join("\n");
 }
 
-/** Splits a model reply into paragraph-sized summary blocks. */
-export function toSummaryBlocks(text: string): { type: "summary"; text: string }[] {
-  const parts = text
+/** Paragraph-sized summary blocks for one stretch of prose ([] when blank). */
+function summaryParts(text: string): { type: "summary"; text: string }[] {
+  return text
     .split(/\n{2,}/)
     .map((p) => p.trim())
-    .filter(Boolean);
-  if (parts.length === 0) return [{ type: "summary", text: "(no response)" }];
-  return parts.map((p) => ({ type: "summary", text: p }));
+    .filter(Boolean)
+    .map((p) => ({ type: "summary", text: p }));
+}
+
+/** Splits a model reply into paragraph-sized summary blocks. */
+export function toSummaryBlocks(text: string): { type: "summary"; text: string }[] {
+  const parts = summaryParts(text);
+  return parts.length > 0 ? parts : [{ type: "summary", text: "(no response)" }];
+}
+
+// A fenced ```occa-chart block the agent appends to carry the OHLCV it already
+// pulled from chartlab. We render the model's OWN data (it authored the block
+// as part of its answer), not raw tool output — the §12 boundary holds.
+const CHART_FENCE = /```occa-chart[^\n]*\n([\s\S]*?)```/g;
+
+/** Parse one occa-chart fence body into a chart block, or null if it's junk. */
+function parseChartFence(body: string): OutputBlock | null {
+  let data: unknown;
+  try {
+    data = JSON.parse(body.trim());
+  } catch {
+    return null;
+  }
+  const raw = (data as { candles?: unknown })?.candles;
+  if (!Array.isArray(raw)) return null;
+  const candles: Candle[] = [];
+  for (const row of raw) {
+    const t = Number(row?.t);
+    const o = Number(row?.o);
+    const h = Number(row?.h);
+    const l = Number(row?.l);
+    const c = Number(row?.c);
+    if (![t, o, h, l, c].every(Number.isFinite)) continue;
+    candles.push({ t, o, h, l, c });
+  }
+  if (candles.length === 0) return null;
+  const interval = (data as { interval?: unknown }).interval;
+  return {
+    type: "chart",
+    candles,
+    ...(typeof interval === "string" ? { interval } : {}),
+  };
+}
+
+/** Turn a model reply into ordered blocks: prose becomes summary blocks, and
+    any ```occa-chart fence becomes a chart block in place. An unparseable
+    fence is dropped rather than shown raw. */
+export function toReplyBlocks(text: string): OutputBlock[] {
+  const blocks: OutputBlock[] = [];
+  let cursor = 0;
+  CHART_FENCE.lastIndex = 0;
+  for (let m = CHART_FENCE.exec(text); m; m = CHART_FENCE.exec(text)) {
+    blocks.push(...summaryParts(text.slice(cursor, m.index)));
+    const chart = parseChartFence(m[1]);
+    if (chart) blocks.push(chart);
+    cursor = m.index + m[0].length;
+  }
+  blocks.push(...summaryParts(text.slice(cursor)));
+  return blocks.length > 0 ? blocks : [{ type: "summary", text: "(no response)" }];
 }

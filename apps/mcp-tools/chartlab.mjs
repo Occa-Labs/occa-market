@@ -206,12 +206,24 @@ async function poolChart({ pool, network = "solana", interval = "1h", candles = 
   const e50 = ema(closes, 50);
   const e200 = ema(closes, 200);
 
+  // Raw OHLCV in a compact {t,o,h,l,c} shape (t = unix seconds), ready for the
+  // agent to echo into an occa-chart block so the UI can draw candles. Capped
+  // to the most recent 80 so the payload stays small enough to transcribe.
+  const candlesOut = rows.slice(-80).map((c) => ({
+    t: Math.floor(new Date(c.time_open).getTime() / 1000),
+    o: round(c.open),
+    h: round(c.high),
+    l: round(c.low),
+    c: round(c.close),
+  }));
+
   return {
     pool,
     network,
     interval,
     candle_count: rows.length,
     window: { from: rows[0].time_open, to: last.time_close },
+    candles: candlesOut,
     price: {
       last_close: round(last.close),
       change_over_window_percent: round(((last.close - rows[0].open) / rows[0].open) * 100, 4),

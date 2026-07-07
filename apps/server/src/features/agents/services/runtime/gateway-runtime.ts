@@ -17,7 +17,7 @@ import type { ChatRunEvent, RuntimeResult } from "@occa-market/shared";
 import { env } from "../../../../config/env";
 import { gatewayRun, type GatewayStreamEvent } from "../../../../infra/gateway/client";
 import type { AgentRow } from "../../../../infra/database/schema";
-import { toSummaryBlocks } from "./prompts";
+import { toReplyBlocks } from "./prompts";
 import type { RuntimeInput } from "./runtime";
 
 // The chat only ever learns WHAT ran, never what went in or came out — tool
@@ -76,7 +76,7 @@ export class GatewayRuntime {
     }
     return {
       ok: true,
-      blocks: toSummaryBlocks(result.reply),
+      blocks: toReplyBlocks(result.reply),
       usage: { costUsd: row.pricePerMsg },
     };
   }

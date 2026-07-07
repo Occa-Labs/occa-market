@@ -12,7 +12,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { RuntimeResult } from "@occa-market/shared";
 import { env } from "../../../../config/env";
 import { getAgent, getAgentDetail } from "../../repositories/agents";
-import { systemPrompt, toSummaryBlocks } from "./prompts";
+import { systemPrompt, toReplyBlocks } from "./prompts";
 import type { AgentRuntime, RuntimeInput } from "./runtime";
 
 export class LLMRuntime implements AgentRuntime {
@@ -45,7 +45,7 @@ export class LLMRuntime implements AgentRuntime {
         .trim();
       return {
         ok: true,
-        blocks: toSummaryBlocks(text),
+        blocks: toReplyBlocks(text),
         usage: { costUsd: agent.pricePerMsg },
       };
     } catch (err) {
