@@ -68,6 +68,8 @@ export const agents = pgTable("agents", {
   detail: jsonb("detail").$type<AgentDetail>().notNull(),
   // Internal: full skill content (SKILL.md markdown + source), seeded to the
   // gateway workspace. Never exposed in the public catalog (blueprint §12).
+  // Secret-bearing (a publisher may paste API keys into skill markdown):
+  // encrypted at rest via infra/crypto, sealed/opened at the repo boundary.
   skillSources: jsonb("skill_sources").$type<AgentSkillInput[]>().notNull().default([]),
   // Internal: MCP server configs for provider-brought tools — seeded to the
   // gateway workspace as .mcp.json. Same visibility rule as skillSources.

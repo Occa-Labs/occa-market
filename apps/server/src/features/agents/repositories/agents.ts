@@ -30,13 +30,17 @@ import { countAnchors, getLatestAnchor, listDayHistory } from "./anchors";
   display-format change.
 */
 /*
-  Secret-bearing columns (tool_configs, runtime) are encrypted at rest via
-  infra/crypto. Seal on the way into the DB, open on the way out — every caller
-  above the repo sees plaintext, and the database only ever holds ciphertext
-  (or legacy plaintext, which passes through until the backfill seals it).
+  Secret-bearing columns (skill_sources, tool_configs, runtime) are encrypted at
+  rest via infra/crypto. Seal on the way into the DB, open on the way out —
+  every caller above the repo sees plaintext, and the database only ever holds
+  ciphertext (or legacy plaintext, which passes through until the backfill
+  seals it).
 */
 function sealSecrets<T extends Partial<NewAgentRow>>(row: T): T {
   const sealed = { ...row };
+  if (sealed.skillSources !== undefined) {
+    sealed.skillSources = encryptSecret(sealed.skillSources) as T["skillSources"];
+  }
   if (sealed.toolConfigs !== undefined) {
     sealed.toolConfigs = encryptSecret(sealed.toolConfigs) as T["toolConfigs"];
   }
@@ -49,6 +53,7 @@ function sealSecrets<T extends Partial<NewAgentRow>>(row: T): T {
 function openSecrets(row: AgentRow): AgentRow {
   return {
     ...row,
+    skillSources: decryptSecret(row.skillSources),
     toolConfigs: decryptSecret(row.toolConfigs),
     runtime: decryptSecret(row.runtime),
   };

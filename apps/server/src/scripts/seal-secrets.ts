@@ -27,12 +27,14 @@ async function main(): Promise<void> {
   const rows = await db.select().from(agents);
   let sealed = 0;
   for (const row of rows) {
+    const needsSkills = !isEncrypted(row.skillSources);
     const needsTools = !isEncrypted(row.toolConfigs);
     const needsRuntime = row.runtime != null && !isEncrypted(row.runtime);
-    if (!needsTools && !needsRuntime) continue;
+    if (!needsSkills && !needsTools && !needsRuntime) continue;
     await db
       .update(agents)
       .set({
+        skillSources: encryptSecret(row.skillSources) as typeof row.skillSources,
         toolConfigs: encryptSecret(row.toolConfigs) as typeof row.toolConfigs,
         runtime: encryptSecret(row.runtime) as typeof row.runtime,
       })

@@ -38,10 +38,11 @@ const envSchema = z.object({
   // boots without it (secrets fall back to plaintext with a warning);
   // production MUST set it. Generate: `openssl rand -base64 32`.
   SECRETS_MASTER_KEY: opt(z.string().min(1).optional()),
-  // Auth. JWT_SECRET signs our own session token (required, fail-fast).
-  // Privy creds are optional so the app boots without them; the Privy login
-  // route errors only when actually hit unconfigured.
-  JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
+  // Auth. JWT_SECRET signs our own session token (required, fail-fast). Min 32
+  // chars so the HS256 key isn't brute-forceable — every ownership check hangs
+  // off this token. Privy creds are optional so the app boots without them; the
+  // Privy login route errors only when actually hit unconfigured.
+  JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
   PRIVY_APP_ID: opt(z.string().min(1).optional()),
   PRIVY_APP_SECRET: opt(z.string().min(1).optional()),
   // GitHub PAT for importing skills from public repos. Optional — anon GitHub

@@ -45,14 +45,36 @@ export const workflowStepSchema = z.object({
   uses: z.array(z.string()).default([]),
 });
 
-// A provider's gateway address. Normalized without a trailing slash — the
-// client appends /v1/… paths.
+// A gateway URL carries a bearer, so it must not cross the wire in the clear:
+// require https, with a carve-out for loopback so local dev (http://localhost)
+// still connects. Shared by every gateway address a bearer rides with — the
+// runtime binding and the wizard's connection probe.
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
+function isSecureGatewayUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol === "https:") return true;
+  return url.protocol === "http:" && LOOPBACK_HOSTS.has(url.hostname);
+}
+
+const secureGatewayUrl = z
+  .string()
+  .trim()
+  .url("gatewayUrl must be a valid http(s) URL")
+  .refine(isSecureGatewayUrl, {
+    message: "gatewayUrl must use https (http is allowed only for localhost)",
+  })
+  // Normalized without a trailing slash — the client appends /v1/… paths.
+  .transform((u) => u.replace(/\/+$/, ""));
+
+// A provider's gateway address.
 export const gatewayTargetSchema = z.object({
-  gatewayUrl: z
-    .string()
-    .trim()
-    .url("gatewayUrl must be a valid http(s) URL")
-    .transform((u) => u.replace(/\/+$/, "")),
+  gatewayUrl: secureGatewayUrl,
   apiKey: z.string().trim().optional(),
 });
 
@@ -60,11 +82,7 @@ export const gatewayTargetSchema = z.object({
 // bearer must never reach a public projection.
 export const runtimeInputSchema = z.object({
   adapterType: z.enum(["claude-code", "openclaw", "codex", "hermes"]),
-  gatewayUrl: z
-    .string()
-    .trim()
-    .url("gatewayUrl must be a valid http(s) URL")
-    .transform((u) => u.replace(/\/+$/, "")),
+  gatewayUrl: secureGatewayUrl,
   apiKey: z.string().trim().optional(),
   model: z.string().trim().min(1, "model is required"),
   externalAgentId: z.string().trim().min(1, "externalAgentId is required"),
