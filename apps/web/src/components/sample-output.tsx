@@ -1,5 +1,6 @@
 import { AlertTriangle, Check, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { AgentChart } from "@/components/agent-chart";
 import { LaunchScan } from "@/components/launch-scan";
 import { MarkdownText } from "@/components/markdown-text";
 import {
@@ -98,6 +99,9 @@ function Block({ block }: { block: OutputBlock }) {
 
     case "launchScan":
       return <LaunchScan launches={block.launches} />;
+
+    case "chart":
+      return <AgentChart candles={block.candles} interval={block.interval} />;
 
     case "thread":
       return (

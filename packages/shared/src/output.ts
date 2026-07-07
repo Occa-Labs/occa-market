@@ -14,6 +14,11 @@ export type SampleRow = { label: string; value: string };
 
 export type SampleSignal = { label: string; status: SignalStatus };
 
+/** One OHLCV candle. `t` is a unix timestamp in SECONDS (Lightweight Charts'
+    UTCTimestamp), o/h/l/c are prices. This is the raw feed chartlab already
+    computes internally; the chart block just carries it to the client. */
+export type Candle = { t: number; o: number; h: number; l: number; c: number };
+
 /** One token row in a new-pair scan — these answers return many, not one. */
 export type LaunchItem = {
   ticker: string;
@@ -32,7 +37,8 @@ export type OutputBlock =
   | { type: "metrics"; items: SampleRow[] }
   | { type: "signals"; items: SampleSignal[] }
   | { type: "launchScan"; launches: LaunchItem[] }
-  | { type: "thread"; posts: string[] };
+  | { type: "thread"; posts: string[] }
+  | { type: "chart"; candles: Candle[]; interval?: string };
 
 export type SampleOutput = {
   /** the prompt that produced this output */
