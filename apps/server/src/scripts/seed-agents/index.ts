@@ -23,7 +23,6 @@ import {
 import { ensureAgentOnchain } from "../../features/agents/services/onchain";
 import { buildSeedFiles } from "../../features/agents/services/runtime/seed";
 import { resolveCatalogTools } from "../../features/agents/services/runtime/tool-catalog";
-import { COMING_SOON_AGENTS } from "./coming-soon";
 import { SEED_AGENTS } from "./defs";
 
 // Same default accent the publish flow stamps (create-agent.ts).
@@ -39,7 +38,7 @@ async function main(): Promise<void> {
   }
 
   let failures = 0;
-  for (const def of [...SEED_AGENTS, ...COMING_SOON_AGENTS]) {
+  for (const def of SEED_AGENTS) {
     const tools = resolveCatalogTools(def.toolNames);
     // Coming-soon rows carry no runtime — that null is what renders the
     // catalog card as "soon" (and clears the binding if one existed).
