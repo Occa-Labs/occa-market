@@ -234,6 +234,34 @@ export const creditLedger = pgTable(
 export type CreditLedgerRow = typeof creditLedger.$inferSelect;
 
 /*
+  x402 charges — the machine-payment money book, append-only. One row per
+  settled x402 payment (USDC arrived at the deposit wallet on-chain before the
+  row exists; tx_signature is the receipt and the replay guard). `delivered`
+  flips true when the agent's reply went out — a settled-but-undelivered row
+  is a refund candidate, never silently dropped. Same price/fee split as
+  credit_ledger charges so provider earnings can be derived across both rails.
+*/
+export const x402Charges = pgTable(
+  "x402_charges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: text("agent_id").notNull(),
+    providerUserId: uuid("provider_user_id"),
+    // Payer wallet (base58) — the refund address for failed runs.
+    payer: text("payer").notNull(),
+    priceMicros: bigint("price_micros", { mode: "number" }).notNull(),
+    feeMicros: bigint("fee_micros", { mode: "number" }).notNull(),
+    txSignature: text("tx_signature").notNull().unique(),
+    delivered: boolean("delivered").notNull().default(false),
+    errorCode: text("error_code"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("x402_charges_agent_idx").on(t.agentId, t.createdAt)],
+);
+
+export type X402ChargeRow = typeof x402Charges.$inferSelect;
+
+/*
   Daily anchors — one row per (agent, UTC day) committed on-chain via the
   registry's commit_daily_anchor. Mirrors the DailyAnchorAccount so reads
   never need an RPC round-trip; the chain stays the tamper-evident source.

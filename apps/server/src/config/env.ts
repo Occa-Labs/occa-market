@@ -89,6 +89,15 @@ const envSchema = z.object({
   USDC_MINT: opt(
     z.string().min(32).default("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
   ),
+  // x402 machine-payment rail (blueprint §6). Pays into DEPOSIT_WALLET, so it
+  // activates with the same switch as credits. The facilitator verifies and
+  // settles payment transactions; the network is CAIP-2 (Solana mainnet).
+  X402_FACILITATOR_URL: opt(
+    z.string().url().default("https://facilitator.payai.network"),
+  ),
+  X402_NETWORK: opt(
+    z.string().min(3).default("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"),
+  ),
 });
 
 function loadEnv() {
@@ -141,6 +150,11 @@ function loadEnv() {
     credits: {
       depositWallet: e.DEPOSIT_WALLET ?? null,
       usdcMint: e.USDC_MINT,
+      enabled: Boolean(e.DEPOSIT_WALLET),
+    },
+    x402: {
+      facilitatorUrl: e.X402_FACILITATOR_URL,
+      network: e.X402_NETWORK,
       enabled: Boolean(e.DEPOSIT_WALLET),
     },
   } as const;

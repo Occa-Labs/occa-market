@@ -15,6 +15,7 @@ import { historyRouter } from "./features/market/routes/history";
 import { statsRouter } from "./features/market/routes/stats";
 import { tokenRoutes } from "./features/token/routes";
 import { creditsRoutes } from "./features/credits/routes";
+import { x402Routes } from "./features/x402/routes";
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use("/api/stats", statsRouter);
 app.use("/api/history", historyRouter);
 app.use("/api/token", tokenRoutes);
 app.use("/api/credits", creditsRoutes);
+app.use("/api/x402", x402Routes);
 
 // Global error handler — async route rejections (e.g. DB errors) land here as a
 // clean 500 instead of crashing the process. Must be last, and take 4 args.

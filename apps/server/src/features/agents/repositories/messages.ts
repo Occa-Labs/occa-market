@@ -167,6 +167,18 @@ export async function recomputeReputation(agentId: string): Promise<void> {
 }
 
 /**
+ * Count a completed run — the volume half of reputation. Chat runs arrive via
+ * appendExchange; the x402 rail calls this directly (no chat session there).
+ */
+export async function countRun(agentId: string): Promise<void> {
+  await db
+    .update(agents)
+    .set({ uses: sql`${agents.uses} + 1` })
+    .where(eq(agents.id, agentId));
+  await recomputeReputation(agentId);
+}
+
+/**
  * Persist a completed exchange, bump the session's activity timestamp, and
  * count the run. Returns the agent reply's id (the handle for rating it).
  */
@@ -187,12 +199,7 @@ export async function appendExchange(
     .update(chatSessions)
     .set({ lastMessageAt: new Date() })
     .where(eq(chatSessions.id, sessionId));
-  // A completed run is a real use — the volume half of reputation.
-  await db
-    .update(agents)
-    .set({ uses: sql`${agents.uses} + 1` })
-    .where(eq(agents.id, agentId));
-  await recomputeReputation(agentId);
+  await countRun(agentId);
   return inserted.find((m) => m.role === "agent")!.id;
 }
 
