@@ -11,6 +11,7 @@ next-env.d.ts
 *.tsbuildinfo
 
 /*.md
+/docs/
 .claude/
 
 # On-chain signer keypairs (devnet) — never commit
