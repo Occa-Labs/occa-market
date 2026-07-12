@@ -306,18 +306,28 @@ export type AgentSettlement = {
  * belong to their session's owner.
  */
 export type RunHistoryEntry = {
-  /** The stored reply's message id. */
+  /** The run's id — the stored reply's message id, or the x402 charge id. */
   id: string;
   createdAt: string;
   agent: { id: string; name: string; glyph: string };
-  /** Buyer thumbs: 1, -1, or 0 when unrated. */
+  /** Which rail the run came in on: a stored chat reply, or a machine x402 call. */
+  source: "run" | "x402";
+  /** Buyer thumbs: 1, -1, or 0 when unrated. Machine (x402) runs are unrated. */
   rating: number;
   /** UTC midnight of the run's day, unix seconds. */
   dayUnix: number;
-  /** True once the run's day root is committed on-chain. */
+  /**
+   * Provenance is on-chain: for a chat run, once its day root is committed;
+   * for an x402 run, the settlement transaction is itself the record.
+   */
   anchored: boolean;
-  /** The day's commit transaction, present once anchored. */
+  /** Chat run: the day's commit tx. x402 run: the settlement tx. */
   txSig?: string;
+  /**
+   * What was actually paid for this run. Null when the run was free (free-tier
+   * budget). Amount is the agent's price in micro-USD (platform fee excluded).
+   */
+  payment: { rail: "credits" | "x402"; amountMicros: number } | null;
 };
 
 export type HistoryStats = {
@@ -333,7 +343,10 @@ export type HistoryStats = {
 export type HistoryResponse = {
   runs: RunHistoryEntry[];
   stats: HistoryStats;
+  /** Cluster for chat-run anchor transactions (the registry program). */
   cluster: string;
+  /** Cluster for x402 settlement transactions (the payment network). */
+  x402Cluster: string;
   nextBefore?: string;
 };
 

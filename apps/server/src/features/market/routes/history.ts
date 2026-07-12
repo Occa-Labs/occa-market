@@ -4,10 +4,19 @@ import { Router } from "express";
 import type { HistoryResponse } from "@occa-market/shared";
 import { asyncHandler } from "../../../lib/async-handler";
 import { onchainCluster } from "../../../infra/onchain/client";
+import { env } from "../../../config/env";
 import { computeHistoryStats, listRunHistory } from "../data/history";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
+
+// The x402 network is a CAIP-2 chain id; map it to a Solana explorer cluster
+// so settlement-tx links resolve. Unknown ids fall back to mainnet-beta.
+function x402ExplorerCluster(): string {
+  const genesis = env.x402.network.split(":")[1];
+  if (genesis === "EtWTRABZaYq6iMfeYKouRu166VU2xqa1") return "devnet";
+  return "mainnet-beta";
+}
 
 export const historyRouter = Router();
 
@@ -34,6 +43,7 @@ historyRouter.get(
       runs,
       stats,
       cluster: onchainCluster(),
+      x402Cluster: x402ExplorerCluster(),
       nextBefore,
     };
     res.json(body);

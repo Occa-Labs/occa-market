@@ -222,6 +222,10 @@ export const creditLedger = pgTable(
     // Charge attribution (informational, no FK — money outlives the catalog).
     agentId: text("agent_id"),
     providerUserId: uuid("provider_user_id"),
+    // The delivered reply this charge paid for (chat_messages.id). No FK for
+    // the same reason: deleting a chat never rewrites the money book. Lets run
+    // history join each run to what was paid for it.
+    messageId: uuid("message_id"),
     priceMicros: bigint("price_micros", { mode: "number" }),
     feeMicros: bigint("fee_micros", { mode: "number" }),
     // Deposit provenance — unique so a transfer can never be credited twice.

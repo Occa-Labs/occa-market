@@ -33,6 +33,22 @@ function Rating({ value }: { value: number }) {
   return <span className="text-faint">—</span>;
 }
 
+function usd(micros: number): string {
+  return `$${(micros / 1_000_000).toFixed(2)}`;
+}
+
+function Payment({ payment }: { payment: RunHistoryEntry["payment"] }) {
+  if (!payment) return <span className="text-faint">free</span>;
+  return (
+    <span className="inline-flex items-baseline gap-1.5">
+      <span className="tabular-nums text-fg">{usd(payment.amountMicros)}</span>
+      <span className="text-[0.6rem] uppercase tracking-[0.14em] text-faint">
+        {payment.rail}
+      </span>
+    </span>
+  );
+}
+
 function AnchorStatus({ run, cluster }: { run: RunHistoryEntry; cluster: string }) {
   if (run.anchored && run.txSig) {
     return (
@@ -59,7 +75,8 @@ export default async function HistoryPage({
   searchParams: Promise<{ before?: string }>;
 }) {
   const { before } = await searchParams;
-  const { runs, stats, cluster, nextBefore } = await getRunHistory(before);
+  const { runs, stats, cluster, x402Cluster, nextBefore } =
+    await getRunHistory(before);
 
   return (
     <div className="min-h-screen">
@@ -83,7 +100,7 @@ export default async function HistoryPage({
 
         <Card className="mt-6 p-0">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] border-collapse font-mono text-xs">
+            <table className="w-full min-w-170 border-collapse font-mono text-xs">
               <thead>
                 <tr className="text-left text-faint">
                   <th className="px-5 py-3 font-normal uppercase tracking-[0.18em] text-[0.6rem]">
@@ -94,6 +111,9 @@ export default async function HistoryPage({
                   </th>
                   <th className="px-5 py-3 font-normal uppercase tracking-[0.18em] text-[0.6rem]">
                     Rating
+                  </th>
+                  <th className="px-5 py-3 font-normal uppercase tracking-[0.18em] text-[0.6rem]">
+                    Payment
                   </th>
                   <th className="px-5 py-3 font-normal uppercase tracking-[0.18em] text-[0.6rem]">
                     Provenance
@@ -121,13 +141,19 @@ export default async function HistoryPage({
                       <Rating value={run.rating} />
                     </td>
                     <td className="px-5 py-3">
-                      <AnchorStatus run={run} cluster={cluster} />
+                      <Payment payment={run.payment} />
+                    </td>
+                    <td className="px-5 py-3">
+                      <AnchorStatus
+                        run={run}
+                        cluster={run.source === "x402" ? x402Cluster : cluster}
+                      />
                     </td>
                   </tr>
                 ))}
                 {runs.length === 0 && (
                   <tr className="border-t border-line">
-                    <td colSpan={4} className="px-5 py-10 text-center">
+                    <td colSpan={5} className="px-5 py-10 text-center">
                       <span className="font-body text-sm text-faint">
                         No runs {before ? "past this point" : "yet"} — history
                         starts with the first agent reply.

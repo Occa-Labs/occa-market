@@ -54,6 +54,7 @@ export async function insertCharge(input: {
   userId: string;
   agentId: string;
   providerUserId: string | null;
+  messageId: string;
   priceMicros: number;
   feeMicros: number;
 }): Promise<void> {
@@ -63,6 +64,7 @@ export async function insertCharge(input: {
     amountMicros: -(input.priceMicros + input.feeMicros),
     agentId: input.agentId,
     providerUserId: input.providerUserId,
+    messageId: input.messageId,
     priceMicros: input.priceMicros,
     feeMicros: input.feeMicros,
   });

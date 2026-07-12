@@ -238,6 +238,7 @@ messagesRoutes.post(
         userId,
         agentId,
         providerUserId: charge.providerUserId,
+        messageId,
         priceMicros: charge.priceMicros,
         feeMicros: charge.feeMicros,
       });
