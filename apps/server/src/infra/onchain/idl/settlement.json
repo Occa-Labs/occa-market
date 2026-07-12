@@ -1,0 +1,973 @@
+{
+  "address": "occaFcDiKh65LtKoNd7TpDn14YaioRFvVR7wHibdMQo",
+  "metadata": {
+    "name": "settlement",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "OCCA Settlement — non-custodial per-agent USDC vaults for the Open Market x402 rail"
+  },
+  "instructions": [
+    {
+      "name": "claim",
+      "docs": [
+        "Split the vault's full balance: the provider's take to their wallet's",
+        "USDC ATA, the fee to the fee treasury's ATA — in one transaction.",
+        "Permissionless: anyone may crank it (the provider normally), because the",
+        "destinations are fixed by the vault and config, not by the caller."
+      ],
+      "discriminator": [
+        62,
+        198,
+        214,
+        193,
+        213,
+        159,
+        108,
+        210
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "agent_pubkey"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "vault_token_account",
+          "docs": [
+            "Vault's ATA — the source of funds."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "usdc_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "provider_wallet",
+          "docs": [
+            "Provider wallet (checked against the vault). Its ATA receives the take."
+          ],
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "provider_token_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "provider_wallet"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "usdc_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "fee_treasury",
+          "docs": [
+            "Fee treasury wallet (checked against config). Its ATA receives the fee."
+          ]
+        },
+        {
+          "name": "fee_token_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "fee_treasury"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "usdc_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "cranker",
+          "docs": [
+            "Anyone. Pays the tx fee and any first-time ATA rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "agent_pubkey",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "init_config",
+      "docs": [
+        "One-time bootstrap of the singleton config. The signer becomes the",
+        "authority (make this a multisig before mainnet). `usdc_mint` is pinned",
+        "for the program's life; everything else is forward-tunable."
+      ],
+      "discriminator": [
+        23,
+        235,
+        115,
+        232,
+        168,
+        96,
+        1,
+        231
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "usdc_mint",
+          "docs": [
+            "The USDC mint to pin. Passed as an account so it must exist and be a",
+            "real mint at bootstrap."
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "fee_treasury",
+          "type": "pubkey"
+        },
+        {
+          "name": "fee_bps",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "init_vault",
+      "docs": [
+        "Create an agent's vault and its USDC ATA. Authority-only (called at",
+        "agent publish). The vault snapshots the CURRENT config fee so that every",
+        "deposit priced against this vault splits at the same rate, whatever the",
+        "global fee becomes later."
+      ],
+      "discriminator": [
+        77,
+        79,
+        85,
+        150,
+        33,
+        217,
+        52,
+        106
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "agent_pubkey"
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "vault_token_account",
+          "docs": [
+            "The vault's own USDC ATA — this address is the x402 `payTo`."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "usdc_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "agent_pubkey",
+          "type": "pubkey"
+        },
+        {
+          "name": "agent_id",
+          "type": "string"
+        },
+        {
+          "name": "provider_wallet",
+          "type": "pubkey"
+        },
+        {
+          "name": "identity",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_config",
+      "docs": [
+        "Forward-tune the fee treasury and/or fee rate. The pinned mint is",
+        "immutable. A fee change never re-splits money already in a vault —",
+        "each vault carries its own fee snapshot (see `init_vault`)."
+      ],
+      "discriminator": [
+        108,
+        158,
+        154,
+        175,
+        212,
+        98,
+        52,
+        66
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "SetConfigParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_provider_wallet",
+      "docs": [
+        "Rotate the provider payout wallet. Only the CURRENT provider wallet can",
+        "sign this — the authority explicitly cannot, so a compromised OCCA key",
+        "can never redirect a provider's revenue."
+      ],
+      "discriminator": [
+        235,
+        155,
+        49,
+        71,
+        154,
+        203,
+        64,
+        24
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "agent_pubkey"
+              }
+            ]
+          }
+        },
+        {
+          "name": "provider_wallet",
+          "docs": [
+            "The current provider wallet — the only signer allowed to rotate."
+          ],
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "_agent_pubkey",
+          "type": "pubkey"
+        },
+        {
+          "name": "new_wallet",
+          "type": "pubkey"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "AgentVault",
+      "discriminator": [
+        232,
+        220,
+        237,
+        164,
+        157,
+        9,
+        215,
+        194
+      ]
+    },
+    {
+      "name": "MarketConfig",
+      "discriminator": [
+        119,
+        255,
+        200,
+        88,
+        252,
+        82,
+        128,
+        24
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Unauthorized",
+      "msg": "Only the config authority may perform this action"
+    },
+    {
+      "code": 6001,
+      "name": "FeeTooHigh",
+      "msg": "Fee exceeds the maximum allowed basis points"
+    },
+    {
+      "code": 6002,
+      "name": "AgentIdTooLong",
+      "msg": "Agent id exceeds the maximum length"
+    },
+    {
+      "code": 6003,
+      "name": "ProviderWalletUnset",
+      "msg": "Provider wallet cannot be the default pubkey"
+    },
+    {
+      "code": 6004,
+      "name": "WrongMint",
+      "msg": "Token mint does not match the pinned USDC mint"
+    },
+    {
+      "code": 6005,
+      "name": "ProviderMismatch",
+      "msg": "Provider wallet does not match the vault"
+    },
+    {
+      "code": 6006,
+      "name": "FeeTreasuryMismatch",
+      "msg": "Fee treasury does not match the config"
+    },
+    {
+      "code": 6007,
+      "name": "BelowMinimumClaim",
+      "msg": "Vault balance is below the minimum claim amount"
+    },
+    {
+      "code": 6008,
+      "name": "ArithmeticOverflow",
+      "msg": "Arithmetic overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "AgentVault",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "agent_pubkey",
+            "docs": [
+              "The agent's registry key — also this vault's PDA seed."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "agent_id",
+            "docs": [
+              "Human-readable catalog id, for off-chain readability."
+            ],
+            "type": "string"
+          },
+          {
+            "name": "provider_wallet",
+            "docs": [
+              "Where the provider share is paid on claim."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "identity",
+            "docs": [
+              "Optional link to the registry AgentIdentity PDA."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_bps",
+            "docs": [
+              "Fee rate snapshot at init — claims always split at this rate."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "claimed_provider",
+            "docs": [
+              "Lifetime provider payouts (transparency counter)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "claimed_fee",
+            "docs": [
+              "Lifetime fee payouts (transparency counter)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "authority",
+            "docs": [
+              "Can init vaults and set_config. Multisig before mainnet."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "usdc_mint",
+            "docs": [
+              "Pinned USDC mint. Immutable for the program's life."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_treasury",
+            "docs": [
+              "Wallet that owns the fee-share ATA (fee routing starts here)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_bps",
+            "docs": [
+              "Fee on top, basis points. 1000 = 10%."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SetConfigParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fee_treasury",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "fee_bps",
+            "type": {
+              "option": "u16"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

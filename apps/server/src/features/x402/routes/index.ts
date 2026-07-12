@@ -20,6 +20,7 @@ import { asyncHandler } from "../../../lib/async-handler";
 import { getAgentRow } from "../../agents/repositories/agents";
 import { countRun } from "../../agents/repositories/messages";
 import { runtime } from "../../agents/services/runtime/registry";
+import { vaultPayTo } from "../../../infra/onchain/settlement";
 import { insertSettledCharge, markChargeOutcome } from "../repositories/charges";
 import {
   claimTransaction,
@@ -99,12 +100,18 @@ x402Routes.post(
       return;
     }
 
+    // Where the payment lands. With the settlement program configured and the
+    // agent registered on-chain, pay into its non-custodial vault (the split
+    // happens on-chain at claim); otherwise the treasury wallet (phase 1). The
+    // charge row records the price/fee attribution either way.
+    const payTo = vaultPayTo(row.onchain?.agentPubkey) ?? env.credits.depositWallet;
+
     const requirements: PaymentRequirements = {
       scheme: "exact",
       network: env.x402.network,
       amount: String(totalMicros),
       asset: env.credits.usdcMint,
-      payTo: env.credits.depositWallet,
+      payTo,
       maxTimeoutSeconds: 60,
       extra: { feePayer },
     };

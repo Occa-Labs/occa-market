@@ -22,6 +22,12 @@ import {
 } from "../../../infra/onchain/client";
 import { leafHash, merkleRoot, sha256 } from "../../../infra/onchain/merkle";
 import {
+  ensureAgentVault,
+  settlementEnabled,
+} from "../../../infra/onchain/settlement";
+import { env } from "../../../config/env";
+import {
+  agentProviderWallet,
   listAgentsWithoutOnchain,
   nextDeploymentIndex,
   updateAgentRow,
@@ -45,7 +51,46 @@ export async function ensureAgentOnchain(row: AgentRow): Promise<boolean> {
   console.log(
     `[onchain] registered ${row.id}: deployment #${index} ${registration.deploymentPda}`,
   );
+  // Give the agent its settlement vault too (best-effort; the x402 rail can
+  // fall back to the treasury wallet until the vault exists).
+  await ensureVaultForAgent(row.id, registration.agentPubkey);
   return true;
+}
+
+/**
+ * Create an agent's settlement vault, paying out to its owner's wallet (or the
+ * treasury wallet when the agent has no linked owner). Best-effort: a failure
+ * logs and returns false so it never blocks a publish. No-op when settlement
+ * is unconfigured.
+ */
+export async function ensureVaultForAgent(
+  agentId: string,
+  agentPubkey: string,
+): Promise<boolean> {
+  if (!settlementEnabled()) return false;
+  const providerWallet = (await agentProviderWallet(agentId)) ?? env.credits.depositWallet;
+  if (!providerWallet) return false;
+  try {
+    return await ensureAgentVault(agentPubkey, agentId, providerWallet);
+  } catch (err) {
+    console.error(`[settlement] vault creation failed for ${agentId}:`, err);
+    return false;
+  }
+}
+
+/**
+ * Create settlement vaults for every on-chain agent that lacks one (backfill
+ * + self-heal). Serialized; safe to re-run. Returns the number created.
+ */
+export async function ensureAllVaults(): Promise<number> {
+  if (!settlementEnabled()) return 0;
+  let created = 0;
+  for (const row of await listOnchainAgents()) {
+    if (row.onchain && (await ensureVaultForAgent(row.id, row.onchain.agentPubkey))) {
+      created++;
+    }
+  }
+  return created;
 }
 
 /**
@@ -151,6 +196,8 @@ export function startAnchorScheduler(): void {
   const sweep = async () => {
     try {
       await registerMissingAgents();
+      const vaults = await ensureAllVaults();
+      if (vaults > 0) console.log(`[settlement] created ${vaults} vault(s)`);
       const n = await runDailyAnchors();
       if (n > 0) console.log(`[onchain] sweep committed ${n} day anchor(s)`);
     } catch (err) {

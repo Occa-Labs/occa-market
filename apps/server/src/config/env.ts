@@ -98,6 +98,12 @@ const envSchema = z.object({
   X402_NETWORK: opt(
     z.string().min(3).default("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"),
   ),
+  // Settlement program (occa-market-programs) — non-custodial per-agent USDC
+  // vaults. When set, x402 payments route to an agent's vault instead of the
+  // treasury wallet, and the split happens on-chain at claim. Runs on the same
+  // RPC as the provenance block (ONCHAIN_RPC_URL). Unset → phase-1 treasury.
+  SETTLEMENT_PROGRAM_ID: opt(z.string().min(32).optional()),
+  SETTLEMENT_AUTHORITY_KEYPAIR: opt(z.string().min(1).optional()),
 });
 
 function loadEnv() {
@@ -156,6 +162,11 @@ function loadEnv() {
       facilitatorUrl: e.X402_FACILITATOR_URL,
       network: e.X402_NETWORK,
       enabled: Boolean(e.DEPOSIT_WALLET),
+    },
+    settlement: {
+      programId: e.SETTLEMENT_PROGRAM_ID ?? null,
+      authorityKeypairPath: e.SETTLEMENT_AUTHORITY_KEYPAIR ?? null,
+      enabled: Boolean(e.SETTLEMENT_PROGRAM_ID && e.SETTLEMENT_AUTHORITY_KEYPAIR),
     },
   } as const;
 }

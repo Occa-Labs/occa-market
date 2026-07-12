@@ -16,6 +16,7 @@ import { db } from "../../../infra/database/client";
 import { decryptSecret, encryptSecret } from "../../../infra/crypto/secrets";
 import {
   agents,
+  users,
   type AgentRow,
   type NewAgentRow,
 } from "../../../infra/database/schema";
@@ -151,6 +152,21 @@ export async function getAgentWithDetail(
 export async function getAgentRow(id: string): Promise<AgentRow | null> {
   const [row] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
   return row ? openSecrets(row) : null;
+}
+
+/**
+ * The wallet an agent's settlement claims should pay out to — its owner's
+ * linked wallet. Null when the agent has no owner or the owner has no wallet
+ * (the caller falls back to the treasury wallet).
+ */
+export async function agentProviderWallet(id: string): Promise<string | null> {
+  const [row] = await db
+    .select({ wallet: users.walletAddress })
+    .from(agents)
+    .innerJoin(users, eq(agents.ownerUserId, users.id))
+    .where(eq(agents.id, id))
+    .limit(1);
+  return row?.wallet ?? null;
 }
 
 export async function agentExists(id: string): Promise<boolean> {

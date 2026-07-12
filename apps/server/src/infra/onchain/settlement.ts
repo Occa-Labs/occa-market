@@ -1,0 +1,134 @@
+/*
+  Settlement client — the server's link to the occa-market settlement program
+  (per-agent non-custodial USDC vaults). Separate program, separate repo
+  (occa-market-programs), so this is its own module rather than folded into the
+  registry/treasury client.
+
+  Role here is narrow: derive an agent's vault address (the x402 `payTo`) and
+  create the vault when an agent publishes. The split + claim live on-chain;
+  the server never moves vault funds. Everything is lazy and optional — with
+  the settlement env block unset, every entry point is a no-op guard and the
+  x402 rail keeps paying the treasury wallet (phase 1).
+*/
+
+import { readFileSync } from "node:fs";
+import * as anchor from "@coral-xyz/anchor";
+import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import { env } from "../../config/env";
+import settlementIdl from "./idl/settlement.json";
+
+type Ctx = {
+  connection: Connection;
+  program: anchor.Program;
+  authority: Keypair;
+  programId: PublicKey;
+};
+
+let cached: Ctx | null = null;
+
+export function settlementEnabled(): boolean {
+  return env.settlement.enabled;
+}
+
+function loadKeypair(path: string): Keypair {
+  return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(path, "utf-8"))));
+}
+
+function ctx(): Ctx {
+  if (cached) return cached;
+  if (!env.settlement.enabled) {
+    throw new Error("settlement is not configured (see SETTLEMENT_* env)");
+  }
+  const authority = loadKeypair(env.settlement.authorityKeypairPath!);
+  // The vault lives on the cluster where x402 payments settle; reuse the
+  // provenance RPC (both devnet today).
+  const connection = new Connection(env.onchain.rpcUrl, "confirmed");
+  const provider = new anchor.AnchorProvider(connection, new anchor.Wallet(authority), {
+    commitment: "confirmed",
+  });
+  const program = new anchor.Program(settlementIdl as anchor.Idl, provider);
+  cached = { connection, program, authority, programId: new PublicKey(env.settlement.programId!) };
+  return cached;
+}
+
+export function deriveConfigPda(programId: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync([Buffer.from("config")], programId)[0];
+}
+
+export function deriveVaultPda(agentPubkey: PublicKey, programId: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("vault"), agentPubkey.toBuffer()],
+    programId,
+  )[0];
+}
+
+/** The vault PDA's USDC associated token account — where x402 payments land. */
+export function deriveVaultAta(agentPubkey: PublicKey, programId: PublicKey): PublicKey {
+  const vault = deriveVaultPda(agentPubkey, programId);
+  return anchor.utils.token.associatedAddress({
+    mint: new PublicKey(env.credits.usdcMint),
+    owner: vault,
+  });
+}
+
+/**
+ * The x402 `payTo` for an agent: its vault PDA (owner). The exact-scheme client
+ * derives the destination ATA from (payTo, asset), which resolves to the vault
+ * ATA. Pure derivation — no RPC, no keypair — so it's safe in the 402 hot path.
+ * Returns null when settlement is off or the agent has no on-chain pubkey.
+ */
+export function vaultPayTo(agentPubkey: string | null | undefined): string | null {
+  if (!env.settlement.enabled || !agentPubkey) return null;
+  const programId = new PublicKey(env.settlement.programId!);
+  return deriveVaultPda(new PublicKey(agentPubkey), programId).toBase58();
+}
+
+/**
+ * Create an agent's vault + its USDC ATA if it doesn't exist yet. Authority
+ * signs and pays rent (~0.002 SOL). Best-effort and idempotent: a live vault
+ * short-circuits, and any chain hiccup logs and returns false so a publish is
+ * never blocked. `providerWallet` is where this agent's claims will pay out.
+ */
+export async function ensureAgentVault(
+  agentPubkey: string,
+  agentId: string,
+  providerWallet: string,
+): Promise<boolean> {
+  if (!settlementEnabled()) return false;
+  const { program, authority, programId } = ctx();
+  const agent = new PublicKey(agentPubkey);
+  const vault = deriveVaultPda(agent, programId);
+  if (await program.provider.connection.getAccountInfo(vault)) return false;
+
+  await program.methods
+    .initVault(agent, agentId, new PublicKey(providerWallet), PublicKey.default)
+    .accountsPartial({ authority: authority.publicKey, usdcMint: new PublicKey(env.credits.usdcMint) })
+    .rpc();
+  console.log(`[settlement] vault created for ${agentId}: ${vault.toBase58()}`);
+  return true;
+}
+
+export type VaultState = {
+  vault: string;
+  providerWallet: string;
+  feeBps: number;
+  claimedProviderMicros: number;
+  claimedFeeMicros: number;
+};
+
+/** Read a vault's on-chain state, or null if it doesn't exist / settlement off. */
+export async function readVault(agentPubkey: string): Promise<VaultState | null> {
+  if (!settlementEnabled()) return null;
+  const { program, programId } = ctx();
+  const vault = deriveVaultPda(new PublicKey(agentPubkey), programId);
+  // The IDL is loaded untyped, so reach the account namespace dynamically.
+  const acc = await (program.account as Record<string, any>).agentVault.fetchNullable(vault);
+  if (!acc) return null;
+  return {
+    vault: vault.toBase58(),
+    providerWallet: acc.providerWallet.toBase58(),
+    feeBps: acc.feeBps,
+    claimedProviderMicros: acc.claimedProvider.toNumber(),
+    claimedFeeMicros: acc.claimedFee.toNumber(),
+  };
+}
