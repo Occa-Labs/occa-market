@@ -112,22 +112,41 @@ export type VaultState = {
   vault: string;
   providerWallet: string;
   feeBps: number;
+  /** USDC currently in the vault ATA (micro-USD), claimable now. */
+  accruedMicros: number;
   claimedProviderMicros: number;
   claimedFeeMicros: number;
 };
 
+/** Devnet vs mainnet, derived from the RPC — for explorer links. */
+export function settlementCluster(): string {
+  return env.onchain.rpcUrl.includes("devnet") ? "devnet" : "mainnet-beta";
+}
+
 /** Read a vault's on-chain state, or null if it doesn't exist / settlement off. */
 export async function readVault(agentPubkey: string): Promise<VaultState | null> {
   if (!settlementEnabled()) return null;
-  const { program, programId } = ctx();
+  const { program, programId, connection } = ctx();
   const vault = deriveVaultPda(new PublicKey(agentPubkey), programId);
   // The IDL is loaded untyped, so reach the account namespace dynamically.
   const acc = await (program.account as Record<string, any>).agentVault.fetchNullable(vault);
   if (!acc) return null;
+
+  // Current claimable balance = the vault ATA's USDC amount (0 if never funded).
+  let accruedMicros = 0;
+  try {
+    const ata = deriveVaultAta(new PublicKey(agentPubkey), programId);
+    const bal = await connection.getTokenAccountBalance(ata);
+    accruedMicros = Number(bal.value.amount);
+  } catch {
+    accruedMicros = 0;
+  }
+
   return {
     vault: vault.toBase58(),
     providerWallet: acc.providerWallet.toBase58(),
     feeBps: acc.feeBps,
+    accruedMicros,
     claimedProviderMicros: acc.claimedProvider.toNumber(),
     claimedFeeMicros: acc.claimedFee.toNumber(),
   };

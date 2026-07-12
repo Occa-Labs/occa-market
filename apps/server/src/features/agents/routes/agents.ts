@@ -9,14 +9,17 @@
 */
 
 import { Router } from "express";
-import type {
-  AgentCreatedResponse,
-  AgentDetailResponse,
-  AgentListResponse,
-  AgentSourceResponse,
+import {
+  microsToUsd,
+  type AgentCreatedResponse,
+  type AgentDetailResponse,
+  type AgentListResponse,
+  type AgentSettlement,
+  type AgentSourceResponse,
 } from "@occa-market/shared";
 import { asyncHandler } from "../../../lib/async-handler";
 import { requireAuth } from "../../../middleware/auth";
+import { readVault, settlementCluster } from "../../../infra/onchain/settlement";
 import {
   getAgentRow,
   getAgentWithDetail,
@@ -192,5 +195,32 @@ agentsRoutes.get(
     }
     const body: AgentDetailResponse = result;
     res.json(body);
+  }),
+);
+
+// GET /api/agents/:id/settlement — the agent's on-chain vault (accrued +
+// claimed), public and read-only. `{ settlement: null }` when settlement is
+// off or the agent has no vault yet. Vault data is public on-chain anyway.
+agentsRoutes.get(
+  "/:id/settlement",
+  asyncHandler(async (req, res) => {
+    const row = await getAgentRow(req.params.id);
+    const agentPubkey = row?.onchain?.agentPubkey;
+    if (!agentPubkey) {
+      res.json({ settlement: null });
+      return;
+    }
+    const vault = await readVault(agentPubkey);
+    const settlement: AgentSettlement | null = vault
+      ? {
+          vault: vault.vault,
+          cluster: settlementCluster(),
+          accruedUsd: microsToUsd(vault.accruedMicros),
+          claimedProviderUsd: microsToUsd(vault.claimedProviderMicros),
+          claimedFeeUsd: microsToUsd(vault.claimedFeeMicros),
+          providerWallet: vault.providerWallet,
+        }
+      : null;
+    res.json({ settlement });
   }),
 );

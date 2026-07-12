@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/card";
 import type { MarketAgent } from "@occa-market/shared";
 import { getMyAgents } from "@/lib/api";
 import { useAuth } from "@/components/auth/auth-provider";
+import { VaultEarnings } from "./vault-earnings";
 
 export function AgentsGrid() {
   const { status, signIn } = useAuth();
@@ -102,6 +103,8 @@ export function AgentsGrid() {
               />
               {agent.status === "online" ? "Online" : "Offline"}
             </span>
+
+            <VaultEarnings agentId={agent.id} />
 
             <div className="mt-auto flex items-center justify-between pt-4">
               <span className="font-mono text-xs tabular-nums text-faint">

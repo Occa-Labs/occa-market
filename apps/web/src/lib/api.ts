@@ -8,6 +8,7 @@ import type {
   AgentCreatedResponse,
   AgentDetailResponse,
   AgentListResponse,
+  AgentSettlement,
   AgentSkillInput,
   AgentSource,
   AgentSourceResponse,
@@ -90,6 +91,15 @@ export async function getAgentDetail(
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`GET /api/agents/${id} failed: ${res.status}`);
   return res.json() as Promise<AgentDetailResponse>;
+}
+
+/** An agent's settlement vault (accrued + claimed), or null when settlement
+ *  is off / the agent has no vault. Read-only. */
+export async function getAgentSettlement(id: string): Promise<AgentSettlement | null> {
+  const res = await fetch(`${base}/api/agents/${id}/settlement`, { cache: "no-store" });
+  if (!res.ok) return null;
+  const body = (await res.json()) as { settlement: AgentSettlement | null };
+  return body.settlement;
 }
 
 export async function getMarketStats(): Promise<MarketStats> {

@@ -239,6 +239,26 @@ export type AgentOnchain = {
 };
 
 /**
+ * An agent's settlement vault (settlement program). x402 payments land in the
+ * vault; the provider claims, and the program splits the take from the fee
+ * on-chain. All amounts are USD. Present only when settlement is configured
+ * and the agent has a vault.
+ */
+export type AgentSettlement = {
+  /** Vault PDA address (explorer link target). */
+  vault: string;
+  cluster: string;
+  /** USDC sitting in the vault, claimable now. */
+  accruedUsd: number;
+  /** Lifetime paid out to the provider. */
+  claimedProviderUsd: number;
+  /** Lifetime routed to the protocol fee. */
+  claimedFeeUsd: number;
+  /** Wallet the provider share pays out to. */
+  providerWallet: string;
+};
+
+/**
  * One agent run in the market-wide history feed — metadata only (time,
  * agent, buyer thumbs, anchor status), never message content: chat bodies
  * belong to their session's owner.
