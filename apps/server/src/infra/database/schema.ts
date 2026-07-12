@@ -262,6 +262,29 @@ export const x402Charges = pgTable(
 export type X402ChargeRow = typeof x402Charges.$inferSelect;
 
 /*
+  Settlement claims — one row per crank of a vault claim (money leaving the
+  vault to the provider + fee treasury on-chain). The chain is authoritative;
+  this mirror exists so the provider's wallet activity reads without walking
+  the chain. `tx_signature` is the on-chain claim; provider_user_id is who
+  triggered it (the owner).
+*/
+export const settlementClaims = pgTable(
+  "settlement_claims",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: text("agent_id").notNull(),
+    providerUserId: uuid("provider_user_id"),
+    providerMicros: bigint("provider_micros", { mode: "number" }).notNull(),
+    feeMicros: bigint("fee_micros", { mode: "number" }).notNull(),
+    txSignature: text("tx_signature").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("settlement_claims_provider_idx").on(t.providerUserId, t.createdAt)],
+);
+
+export type SettlementClaimRow = typeof settlementClaims.$inferSelect;
+
+/*
   Daily anchors — one row per (agent, UTC day) committed on-chain via the
   registry's commit_daily_anchor. Mirrors the DailyAnchorAccount so reads
   never need an RPC round-trip; the chain stays the tamper-evident source.

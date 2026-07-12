@@ -26,8 +26,9 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { TierBadge } from "@/components/token/tier-badge";
 import { useTokenStanding } from "@/components/token/use-token-standing";
 import { useCredits } from "@/components/credits/use-credits";
+import { WalletSection } from "./wallet-section";
 
-type SectionKey = "account" | "credits" | "standing";
+type SectionKey = "account" | "wallet" | "credits" | "standing";
 
 const NAV_GROUPS: {
   label: string;
@@ -44,6 +45,7 @@ const NAV_GROUPS: {
     label: "Account",
     items: [
       { key: "account", label: "Settings", icon: SettingsIcon },
+      { key: "wallet", label: "Wallet", icon: Wallet },
       { key: "credits", label: "Credits", icon: Wallet, soon: true },
     ],
   },
@@ -56,6 +58,7 @@ const NAV_GROUPS: {
 
 const SECTION_TITLES: Record<SectionKey, string> = {
   account: "Settings",
+  wallet: "Wallet",
   credits: "Credits",
   standing: "Holder standing",
 };
@@ -326,7 +329,7 @@ export function AccountSettings() {
           <p className="mt-1 font-body text-[13px] leading-relaxed text-muted">
             {credits?.depositWallet
               ? "Send USDC from your linked wallet to the market's deposit address, then paste the transaction signature below. The transfer is verified on-chain before it's credited."
-              : "Funding opens with the payments launch — your USDC will stay in a wallet you own, and messages will draw from it with no pop-up per message."}
+              : "Funding opens with the payments launch. You'll deposit USDC once into your credit balance, and messages draw from it with no pop-up per message."}
           </p>
           <div className="mt-3 flex max-w-lg items-center gap-2 rounded-xl border border-line bg-surface-2/60 px-3.5 py-2.5">
             <p className="min-w-0 flex-1 select-all break-all font-mono text-xs text-faint">
@@ -467,9 +470,11 @@ export function AccountSettings() {
         <div className="mt-10 flex flex-col gap-8">
           {active === "account"
             ? accountSection
-            : active === "credits"
-              ? creditsSection
-              : standingSection}
+            : active === "wallet"
+              ? <WalletSection />
+              : active === "credits"
+                ? creditsSection
+                : standingSection}
         </div>
       </div>
     </div>

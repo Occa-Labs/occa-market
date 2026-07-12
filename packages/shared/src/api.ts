@@ -239,6 +239,48 @@ export type AgentOnchain = {
 };
 
 /**
+ * A provider's money at a glance: spendable USDC in their wallet plus their
+ * settlement earnings summed across every agent they own (claimable now +
+ * claimed to date). All amounts USD.
+ */
+export type WalletSummary = {
+  walletAddress: string | null;
+  /** USDC held in the wallet (real USDC on mainnet; 0 when unread). */
+  spendableUsdcUsd: number;
+  earnings: {
+    /** Sum of vault balances claimable right now. */
+    claimableUsd: number;
+    /** Lifetime claimed to the provider across all their agents. */
+    claimedUsd: number;
+    /** How many of their agents have a vault. */
+    agents: number;
+  };
+};
+
+/**
+ * One row of a provider's wallet activity — a payment their agent received
+ * (money into the vault) or a claim they cranked (money out to their wallet).
+ */
+export type WalletActivityEntry = {
+  kind: "payment" | "claim";
+  agentId: string;
+  agentName: string;
+  /** Provider-facing amount, USD: the earned price in, the claimed take out. */
+  amountUsd: number;
+  txSig: string | null;
+  cluster: string;
+  /** ISO timestamp. */
+  at: string;
+};
+
+export type WalletHistoryResponse = { activity: WalletActivityEntry[] };
+
+/** Result of cranking a vault claim. `claimedUsd` is the provider's take. */
+export type SettlementClaimResponse =
+  | { ok: true; txSig: string; claimedUsd: number; feeUsd: number; cluster: string }
+  | { ok: false; error: string };
+
+/**
  * An agent's settlement vault (settlement program). x402 payments land in the
  * vault; the provider claims, and the program splits the take from the fee
  * on-chain. All amounts are USD. Present only when settlement is configured

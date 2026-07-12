@@ -16,10 +16,12 @@ import {
   type AgentListResponse,
   type AgentSettlement,
   type AgentSourceResponse,
+  type SettlementClaimResponse,
 } from "@occa-market/shared";
 import { asyncHandler } from "../../../lib/async-handler";
 import { requireAuth } from "../../../middleware/auth";
-import { readVault, settlementCluster } from "../../../infra/onchain/settlement";
+import { claimVault, readVault, settlementCluster } from "../../../infra/onchain/settlement";
+import { insertClaimRecord } from "../../wallet/repositories/activity";
 import {
   getAgentRow,
   getAgentWithDetail,
@@ -222,5 +224,52 @@ agentsRoutes.get(
         }
       : null;
     res.json({ settlement });
+  }),
+);
+
+// POST /api/agents/:id/claim — crank the agent's vault claim (owner-triggered).
+// The split lands on-chain to the provider wallet + fee treasury; the server
+// only pays the tx (it can't redirect a permissionless claim). Owner-scoped so
+// a stranger can't spend our fee keypair; the money is safe either way.
+agentsRoutes.post(
+  "/:id/claim",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const row = await getAgentRow(req.params.id);
+    if (!row) {
+      res.status(404).json({ ok: false, error: "not found" });
+      return;
+    }
+    if (row.ownerUserId && row.ownerUserId !== req.user!.userId) {
+      res.status(403).json({ ok: false, error: "not your agent" });
+      return;
+    }
+    const agentPubkey = row.onchain?.agentPubkey;
+    if (!agentPubkey) {
+      res.status(400).json({ ok: false, error: "agent has no vault" });
+      return;
+    }
+    const result = await claimVault(agentPubkey);
+    if (result.ok) {
+      // Mirror the on-chain claim so the provider's wallet activity reads
+      // without walking the chain (best-effort — the chain is the truth).
+      await insertClaimRecord({
+        agentId: row.id,
+        providerUserId: req.user!.userId,
+        providerMicros: result.providerMicros,
+        feeMicros: result.feeMicros,
+        txSignature: result.txSig,
+      }).catch((err) => console.error("[settlement] claim record failed:", err));
+    }
+    const body: SettlementClaimResponse = result.ok
+      ? {
+          ok: true,
+          txSig: result.txSig,
+          claimedUsd: microsToUsd(result.providerMicros),
+          feeUsd: microsToUsd(result.feeMicros),
+          cluster: settlementCluster(),
+        }
+      : { ok: false, error: result.error };
+    res.status(result.ok ? 200 : 400).json(body);
   }),
 );

@@ -151,3 +151,56 @@ export async function readVault(agentPubkey: string): Promise<VaultState | null>
     claimedFeeMicros: acc.claimedFee.toNumber(),
   };
 }
+
+/** Minimum claimable balance the program enforces (micro-USD). Mirrored here
+ *  so the UI can disable the button with a reason instead of failing on-chain. */
+export const MIN_CLAIM_MICROS = 1_000_000;
+
+export type ClaimResult =
+  | { ok: true; txSig: string; providerMicros: number; feeMicros: number }
+  | { ok: false; error: string };
+
+/**
+ * Crank an agent's vault claim: split the balance to the provider wallet + fee
+ * treasury on-chain, in one transaction. The claim is permissionless (the
+ * destinations are fixed by the program), so the server signing as the fee
+ * payer cannot redirect a cent — it only triggers and pays the tx. Returns the
+ * split that landed, or a reason it couldn't.
+ */
+export async function claimVault(agentPubkey: string): Promise<ClaimResult> {
+  if (!settlementEnabled()) return { ok: false, error: "settlement_disabled" };
+  const { program, authority, programId, connection } = ctx();
+  const agent = new PublicKey(agentPubkey);
+  const vault = deriveVaultPda(agent, programId);
+
+  const acc = await (program.account as Record<string, any>).agentVault.fetchNullable(vault);
+  if (!acc) return { ok: false, error: "no_vault" };
+  const config = await (program.account as Record<string, any>).marketConfig.fetch(
+    deriveConfigPda(programId),
+  );
+
+  // Balance + split preview (the program recomputes and enforces the same).
+  const ata = deriveVaultAta(agent, programId);
+  let balance = 0;
+  try {
+    balance = Number((await connection.getTokenAccountBalance(ata)).value.amount);
+  } catch {
+    balance = 0;
+  }
+  if (balance < MIN_CLAIM_MICROS) return { ok: false, error: "below_minimum" };
+  const providerMicros = Math.floor((balance * 10_000) / (10_000 + acc.feeBps));
+  const feeMicros = balance - providerMicros;
+
+  const txSig = await (program.methods as Record<string, any>)
+    .claim(agent)
+    .accountsPartial({
+      vault,
+      usdcMint: config.usdcMint,
+      providerWallet: acc.providerWallet,
+      feeTreasury: config.feeTreasury,
+      cranker: authority.publicKey,
+    })
+    .rpc();
+
+  return { ok: true, txSig, providerMicros, feeMicros };
+}

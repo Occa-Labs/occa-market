@@ -169,6 +169,19 @@ export async function agentProviderWallet(id: string): Promise<string | null> {
   return row?.wallet ?? null;
 }
 
+/** An owner's agents that carry an on-chain pubkey (i.e. can have a vault). */
+export async function listOwnerOnchainAgents(
+  userId: string,
+): Promise<{ id: string; agentPubkey: string }[]> {
+  const rows = await db
+    .select({ id: agents.id, onchain: agents.onchain })
+    .from(agents)
+    .where(and(eq(agents.ownerUserId, userId), isNotNull(agents.onchain)));
+  return rows
+    .filter((r) => r.onchain?.agentPubkey)
+    .map((r) => ({ id: r.id, agentPubkey: r.onchain!.agentPubkey }));
+}
+
 export async function agentExists(id: string): Promise<boolean> {
   const [row] = await db
     .select({ id: agents.id })

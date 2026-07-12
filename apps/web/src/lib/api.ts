@@ -12,6 +12,7 @@ import type {
   AgentSkillInput,
   AgentSource,
   AgentSourceResponse,
+  SettlementClaimResponse,
   AuthResponse,
   AuthUser,
   ChatHistoryResponse,
@@ -27,6 +28,8 @@ import type {
   HistoryResponse,
   MarketAgent,
   MarketStats,
+  WalletActivityEntry,
+  WalletSummary,
   SendMessageRequest,
   SendMessageResponse,
   SharedSessionResponse,
@@ -100,6 +103,38 @@ export async function getAgentSettlement(id: string): Promise<AgentSettlement | 
   if (!res.ok) return null;
   const body = (await res.json()) as { settlement: AgentSettlement | null };
   return body.settlement;
+}
+
+/** Crank an agent's vault claim (owner-only). Splits the balance on-chain. */
+export async function claimVault(id: string): Promise<SettlementClaimResponse> {
+  const res = await fetch(`${base}/api/agents/${id}/claim`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+  });
+  const data = (await res.json().catch(() => null)) as SettlementClaimResponse | null;
+  if (data) return data;
+  return { ok: false, error: `claim failed (HTTP ${res.status})` };
+}
+
+/** The signed-in provider's spendable USDC + settlement earnings. */
+export async function getWallet(): Promise<WalletSummary | null> {
+  const res = await fetch(`${base}/api/wallet`, {
+    headers: { ...authHeaders() },
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  return res.json() as Promise<WalletSummary>;
+}
+
+/** The provider's recent settlement activity (payments in + claims out). */
+export async function getWalletHistory(): Promise<WalletActivityEntry[]> {
+  const res = await fetch(`${base}/api/wallet/history`, {
+    headers: { ...authHeaders() },
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  const body = (await res.json()) as { activity: WalletActivityEntry[] };
+  return body.activity;
 }
 
 export async function getMarketStats(): Promise<MarketStats> {
